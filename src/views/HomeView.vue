@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import TheWelcome from '../components/TheWelcome.vue'
+import CounterDisplay from '@/components/CounterDisplay.vue'
 </script>
 
 <template>
-  <main>
-    <TheWelcome />
-  </main>
+  <div class="home">
+    <h1>Home Page</h1>
+    <CounterDisplay />
+  </div>
 </template>
+
+<style scoped>
+.home {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+</style>

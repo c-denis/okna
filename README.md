@@ -1,39 +1,129 @@
-# frontend
+markdown
 
-This template should help get you started developing with Vue 3 in Vite.
+# Проект: [Название проекта]
 
-## Recommended IDE Setup
+## 🚀 Быстрый старт
 
-[VSCode](https://code.visualstudio.com/) + [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+### Установка зависимостей
+```bash
 npm install
-```
 
-### Compile and Hot-Reload for Development
+Запуск разработки
+bash
 
-```sh
 npm run dev
-```
 
-### Type-Check, Compile and Minify for Production
+Сборка для production
+bash
 
-```sh
 npm run build
-```
 
-### Lint with [ESLint](https://eslint.org/)
+Запуск тестов
+bash
 
-```sh
+npm run test
+
+🏗️ Структура проекта
+
+src/
+├── assets/               # Статические ресурсы
+│   └── styles/           # Глобальные стили
+│       ├── base.css      # Базовые стили
+│       ├── utilities.css # Вспомогательные классы
+│       └── variables.css # CSS-переменные
+│
+├── components/           # UI-компоненты
+│   ├── icons/            # SVG-иконки
+│   └── ui/               # Базовые компоненты (Button, Input и др.)
+│
+├── composables/          # Composition API хуки
+│   └── api/              # API-методы
+│
+├── features/             # Функциональные компоненты
+│   ├── Auth/             # Авторизация
+│   ├── Dashboard/        # Дашборд
+│   └── Requests/         # Работа с заявками
+│
+├── stores/               # Хранилища Pinia
+├── types/                # Типы TypeScript
+└── views/                # Страницы приложения
+
+📝 Правила разработки
+1. Работа с компонентами
+
+    UI-компоненты → /components/ui/
+
+    Иконки → /components/icons/
+
+    Бизнес-компоненты → /features/
+
+Пример:
+javascript
+
+// Правильно
+import AppButton from '@/components/ui/AppButton.vue'
+import { useAuth } from '@/features/Auth/composables/useAuth'
+
+2. Работа с API
+
+    Каждая сущность имеет свой файл в composables/api/
+
+    Используйте готовый хук useFetch
+
+Пример:
+typescript
+
+// composables/api/posts.api.ts
+export const usePostsApi = () => {
+  const fetchPosts = () => useFetch('/api/posts')
+  return { fetchPosts }
+}
+
+3. Стилизация
+
+    Глобальные переменные → variables.css
+
+    Утилитарные классы → utilities.css
+
+    Компонентные стили → <style scoped> в компоненте
+
+🔧 Code Quality
+Линтинг
+bash
+
 npm run lint
-```
+
+Форматирование
+bash
+
+npm run format
+
+Pre-commit хуки
+
+    Автоматически запускают линтинг
+
+    Проверяют соответствие структуре проекта
+
+🛠 Технологический стек
+
+    Vue 3 + TypeScript
+
+    Pinia (стейт-менеджмент)
+
+    Vite (сборка)
+
+    Vitest (тестирование)
+
+    ESLint + Prettier (линтеры)
+
+🤝 Участие в разработке
+
+    Создайте ветку от main
+
+    Следуйте соглашениям о структуре
+
+    Откройте Pull Request с описанием изменений
+
+📜 Лицензия
+
+MIT
