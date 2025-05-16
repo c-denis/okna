@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="login-form">
+  <form class="login-form" @submit.prevent="handleSubmit">
     <AppInput
       v-model="form.email"
       type="email"

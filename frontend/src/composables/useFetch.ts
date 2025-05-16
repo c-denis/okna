@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import axios, { type AxiosResponse, type AxiosError } from '@/api/client'
+import axios, { type AxiosResponse, type AxiosError } from '@/utils/httpClient'
 
 export function useFetch<T>() {
   const data = ref<T>()

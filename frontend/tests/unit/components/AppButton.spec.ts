@@ -1,6 +1,6 @@
 // src/components/__tests__/AppButton.spec.ts
 import { render, screen, fireEvent } from '@testing-library/vue'
-import AppButton from '../ui/AppButton.vue'
+import AppButton from '../../../src/components/ui/AppButton.vue'
 
 test('emits click event when clicked', async () => {
   const { emitted } = render(AppButton)

@@ -18,7 +18,7 @@
           <span class="name">{{ user.name }}</span>
           <span class="role">{{ roleName }}</span>
         </div>
-        <button @click="logout" class="logout-btn">
+        <button class="logout-btn" @click="logout">
           <LogoutIcon />
         </button>
       </div>

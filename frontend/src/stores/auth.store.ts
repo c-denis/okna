@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
-import axios from '@/api/client'
+import axios from '@utils/httpClient'
 import router from '@/router'
-import type { User } from '@/types/users'
+import type { User } from '@/types/users.d'
 
 interface AuthState {
   user: User | null

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import axios from '@/api/client'
+import axios from '@/utils/httpClient'
 import type { User, Manager } from '@/types/users'
 
 interface UsersState {

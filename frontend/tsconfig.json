@@ -1,12 +1,20 @@
 {
   "compilerOptions": {
-    "types": ["vite/client", "node"],
+     "lib": ["ES2016", "DOM"],
+    "target": "ES2016",
+    "types": ["vite/client", "vitest/globals"],
     "module": "ESNext",
     "moduleResolution": "node",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "baseUrl": ".",  // <-- Добавьте эту строку
+    "paths": {       // <-- Добавьте этот блок
+      "@/*": ["src/*"],
+      "@components/*": ["src/components/*"],
+      "@utils/*": ["src/utils/*"]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
   "exclude": ["node_modules"]

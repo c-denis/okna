@@ -1,13 +1,13 @@
 import { defineStore } from 'pinia';
-import axios from '@/api/client';
+import axios from '@/utils/httpClient';
 import {
   fetchRequests as fetchRequestsApi,
   createRequest as createRequestApi,
   assignRequest as assignRequestApi,
   updateRequestStatus as updateRequestStatusApi,
   getRequestDetails as getRequestDetailsApi
-} from '@/api/requests.api';
-import type { Request, RequestData, RequestStatus } from '@/types/requests';
+} from '@/composables/api/requests.api';
+import type { Request, RequestData, RequestStatus } from '@/types/requests.d';
 
 export const useRequestsStore = defineStore('requests', {
   state: () => ({

@@ -3,8 +3,8 @@
     <h1>Настройки системы</h1>
     <div class="settings-form">
       <AppInput
-        label="Название CRM"
         v-model="settings.title"
+        label="Название CRM"
       />
       <AppButton @click="saveSettings">
         Сохранить

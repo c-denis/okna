@@ -19,7 +19,7 @@
         <span class="detail-label">Статус:</span>
         <StatusBadge :status="request.status" />
       </div>
-      <div class="detail-row" v-if="request.managerId">
+      <div v-if="request.managerId" class="detail-row">
         <span class="detail-label">Менеджер:</span>
         <span>{{ assignedManager?.name || 'Не назначен' }}</span>
       </div>
@@ -27,13 +27,13 @@
         <span class="detail-label">Дата создания:</span>
         <span>{{ formattedDate }}</span>
       </div>
-      <div class="detail-row" v-if="request.comment">
+      <div v-if="request.comment" class="detail-row">
         <span class="detail-label">Комментарий:</span>
         <span>{{ request.comment }}</span>
       </div>
     </div>
 
-    <div class="status-actions" v-if="canChangeStatus">
+    <div v-if="canChangeStatus" class="status-actions">
       <AppSelect
         v-model="selectedStatus"
         :options="availableStatusOptions"

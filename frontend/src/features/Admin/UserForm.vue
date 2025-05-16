@@ -1,19 +1,19 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="user-form">
+  <form class="user-form" @submit.prevent="handleSubmit">
     <AppInput
-      label="Имя"
       v-model="form.name"
+      label="Имя"
       required
     />
     <AppInput
+      v-model="form.email"
       label="Email"
       type="email"
-      v-model="form.email"
       required
     />
     <AppSelect
-      label="Роль"
       v-model="form.role"
+      label="Роль"
       :options="roleOptions"
       required
     />
