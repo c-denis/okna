@@ -1,4 +1,4 @@
-import axios from '@/api/client';
+import httpClient from '@/utils/httpClient';
 
 export interface Post {
   id: string;
@@ -9,21 +9,44 @@ export interface Post {
   updatedAt?: string;
 }
 
+export interface CreatePostDto extends Omit<Post, 'id' | 'createdAt' | 'updatedAt'> {}
+export interface UpdatePostDto extends Partial<Omit<Post, 'id' | 'authorId' | 'createdAt'>> {}
+
 export const fetchPosts = async (): Promise<Post[]> => {
-  const response = await axios.get('/posts');
-  return response.data;
+  try {
+    const response = await httpClient.get<Post[]>('/posts');
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    throw error;
+  }
 };
 
-export const createPost = async (postData: Omit<Post, 'id'|'createdAt'>): Promise<Post> => {
-  const response = await axios.post('/posts', postData);
-  return response.data;
+export const createPost = async (postData: CreatePostDto): Promise<Post> => {
+  try {
+    const response = await httpClient.post<Post>('/posts', postData);
+    return response.data;
+  } catch (error) {
+    console.error('Error creating post:', error);
+    throw error;
+  }
 };
 
-export const updatePost = async (id: string, postData: Partial<Post>): Promise<Post> => {
-  const response = await axios.patch(`/posts/${id}`, postData);
-  return response.data;
+export const updatePost = async (id: string, postData: UpdatePostDto): Promise<Post> => {
+  try {
+    const response = await httpClient.patch<Post>(`/posts/${id}`, postData);
+    return response.data;
+  } catch (error) {
+    console.error(`Error updating post ${id}:`, error);
+    throw error;
+  }
 };
 
 export const deletePost = async (id: string): Promise<void> => {
-  await axios.delete(`/posts/${id}`);
+  try {
+    await httpClient.delete(`/posts/${id}`);
+  } catch (error) {
+    console.error(`Error deleting post ${id}:`, error);
+    throw error;
+  }
 };
