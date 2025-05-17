@@ -66,6 +66,14 @@ const createHttpClient = (): AxiosInstance => {
   return api;
 };
 
+axios.interceptors.response.use(
+  response => response,
+  error => {
+    // Обработка ошибок
+    return Promise.reject(error);
+  }
+);
+
 const httpClient = createHttpClient();
 
 export default httpClient;

@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    command: sh -c "python -m gunicorn --bind 0.0.0.0:8000 crm_core.wsgi:application"
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - DATABASE_URL=postgres://postgres:password@db:5432/crm_db  # Исправлено имя БД
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    # tty и stdin_open удалены (не нужны для production)
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres  # Явное указание пользователя
+      POSTGRES_PASSWORD: ZxZx115511
+      POSTGRES_DB: crm_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crm_db"]  # Проверка конкретной БД
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"  # Для внешнего подключения (опционально)
+
+volumes:
+  postgres_data:
