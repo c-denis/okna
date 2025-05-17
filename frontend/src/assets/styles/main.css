@@ -1,0 +1,13 @@
+/* Главный файл стилей - точка входа */
+@import './base.css';
+@import './variables.css';
+@import './utilities.css';
+
+/* Глобальные стили приложения */
+#app {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: auto 1fr;
+}
+
+/* Импортируйте сюда другие CSS-файлы при необходимости */

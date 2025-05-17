@@ -2,8 +2,8 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import App from './App.vue'
 import router from './router'
-import { registerComponents } from '@/utils/register-components'
-import { useAuthStore } from '@/stores/auth.store'
+import registerComponents from '@/utils/register-components'
+import useAuthStore from '@/stores/auth.store'
 
 import '@/assets/styles/main.css'
 

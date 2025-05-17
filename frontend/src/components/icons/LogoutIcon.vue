@@ -21,4 +21,6 @@ defineProps({
 <style scoped>
 .icon {
   width: v-bind('typeof size === "number" ? `${size}px` : size');
-  height: v
+  height: v-bind('typeof size === "number" ? `${size}px` : size');
+}
+</style>

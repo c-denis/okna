@@ -1,0 +1,5 @@
+export { default as DashboardIcon } from './DashboardIcon.vue'
+export { default as LogoutIcon } from './LogoutIcon.vue'
+export { default as RequestsIcon } from './RequestsIcon.vue'
+export { default as UsersIcon } from './UsersIcon.vue'
+export { default as ReportsIcon } from './ReportsIcon.vue'

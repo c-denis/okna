@@ -26,7 +26,7 @@ const mainRoutes: RouteRecordRaw[] = [
   {
     path: '/requests',
     name: 'requests',
-    component: () => import('@/views/Requests/ListView.vue'),
+    component: () => import('@/views/ListView.vue'),
     meta: {
       layout: MainLayout,
       requiresAuth: true,
