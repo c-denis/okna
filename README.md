@@ -110,94 +110,53 @@ okna/
 
 Полная структура проекта
 
-okna/
-├── .gitignore                    # Игнорируемые файлы для Git
-├── .env                          # Переменные окружения (SECRET_KEY, DB_URL, TELEGRAM_TOKEN)
-├── docker-compose.yml            # Конфигурация контейнеров (Django, Vue, PostgreSQL, Redis)
-├── README.md                     # Основная документация
+Okna/
+├── .env                      # Переменные окружения (SECRET_KEY, DB_URL, TELEGRAM_TOKEN)
+├── .gitignore                # Игнорируемые файлы для Git
+├── docker-compose.yml        # Конфигурация контейнеров
+├── README.md                 # Основная документация
 │
-├── backend/                      # Django-приложение
-│   ├── __init__.py
-│   ├── asgi.py                   # ASGI-конфигурация
-│   ├── wsgi.py                   # WSGI-конфигурация
-│   ├── settings/                 # Настройки (разделены по средам)
-│   │   ├── base.py               # Базовые настройки
-│   │   ├── production.py         # Продакшен-конфиг
-│   │   └── development.py        # Дев-конфиг
-│   │
-│   ├── api/                      # API v1
+├── backend/                  # Django-приложение
+│   ├── config/               # Конфигурация проекта
 │   │   ├── __init__.py
-│   │   ├── urls.py               # Все маршруты API
-│   │   ├── schemas/              # Схемы Pydantic
-│   │   │   ├── order.py          # Валидация заявок
-│   │   │   └── user.py           # Валидация пользователей
+│   │   ├── settings.py       # Основные настройки (перенесено из crm_core)
+│   │   ├── urls.py           # Главные URL-маршруты
+│   │   └── wsgi.py            # WSGI-конфигурация
+│   │
+│   ├── apps/                 # Модульные приложения
+│   │   ├── orders/           # Заявки
+│   │   │   ├── __init__.py
+│   │   │   ├── admin.py      # Админ-панель
+│   │   │   ├── models.py     # Модель Order, Status и др.
+│   │   │   ├── views.py      # CBV для заявок
+│   │   │   └── urls.py       # Локальные маршруты
 │   │   │
-│   │   ├── views/                # Представления
-│   │   │   ├── auth.py           # Аутентификация
-│   │   │   ├── orders.py         # CRUD заявок
-│   │   │   ├── users.py          # Управление пользователями
-│   │   │   ├── locations.py      # Локации
-│   │   │   └── reports.py        # Отчеты (XLSX/PDF)
-│   │   │
-│   │   └── tests/                # API-тесты
-│   │       ├── test_orders.py
-│   │       └── test_users.py
+│   │   └── users/            # Пользователи
+│   │       ├── __init__.py
+│   │       ├── models.py     # Custom User, Role
+│   │       ├── views.py      # Управление пользователями
+│   │       └── urls.py
 │   │
-│   ├── apps/                     # Django-приложения
-│   │   ├── core/                 # Ядро системы
-│   │   │   ├── models.py         # Базовые модели
-│   │   │   └── utils.py          # Утилиты (валидаторы)
-│   │   │
-│   │   ├── orders/               # Заявки
-│   │   │   ├── models.py         # Модель Order
-│   │   │   ├── admin.py          # Админка
-│   │   │   └── signals.py        # Сигналы (уведомления)
-│   │   │
-│   │   └── users/                # Пользователи
-│   │       ├── models.py         # Custom User Model
-│   │       └── permissions.py    # Права доступа
+│   ├── api/                  # REST API
+│   │   ├── __init__.py
+│   │   ├── views.py          # APIView для заявок/пользователей
+│   │   ├── serializers.py    # DRF-сериализаторы
+│   │   └── urls.py          # API endpoints
 │   │
-│   ├── config/                   # Конфигурация
-│   │   ├── celery.py             # Celery (асинхронные задачи)
-│   │   └── cache.py              # Кэширование (Redis)
+│   ├── utils/                # Вспомогательные модули
+│   │   ├── __init__.py
+│   │   ├── logging.py       # Конфигурация логов (заменяет logs/debug.log)
+│   │   └── security.py      # Хелперы безопасности
 │   │
-│   ├── db/                       # Работа с БД
-│   │   ├── fixtures/             # Фикстуры
-│   │   └── seeders.py            # Наполнение тестовыми данными
+│   ├── templates/           # Шаблоны (если нужны)
+│   │   └── base.html
 │   │
-│   ├── libs/                     # Внешние библиотеки
-│   │   └── telegram_api/         # Кастомная обертка для Telegram API
+│   ├── static/              # Статические файлы
+│   │   ├── css/
+│   │   └── js/
 │   │
-│   ├── locale/                   # Локализации
-│   │   └── ru/                   # Русский язык
-│   │
-│   ├── management/               # CLI-команды
-│   │   ├── commands/
-│   │   │   ├── backup_db.py      # Резервное копирование
-│   │   │   ├── create_admin.py   # Создание админа
-│   │   │   └── send_alerts.py    # Проверка уведомлений
-│   │   └── utils.py              # Утилиты для команд
-│   │
-│   ├── migrations/               # Миграции БД
-│   │   └── 0001_initial.py       # Первичные миграции
-│   │
-│   ├── static/                   # Статика
-│   │   ├── css/                  # Глобальные стили
-│   │   └── images/               # Изображения (логотипы)
-│   │
-│   ├── templates/                # Шаблоны (для email)
-│   │   └── emails/               # Письма
-│   │       ├── alert.html        # Шаблон уведомления
-│   │       └── base.html         # Базовый шаблон
-│   │
-│   ├── requirements/             # Зависимости
-│   │   ├── base.txt              # Основные
-│   │   ├── dev.txt               # Для разработки
-│   │   └── prod.txt              # Для продакшена
-│   │
-│   └── utils/                    # Вспомогательные скрипты
-│       ├── logging.py            # Настройка логов
-│       └── security.py           # Хелперы безопасности
+│   ├── manage.py
+│   └── requirements.txt    # Зависимости
 │
 ├── frontend/                     # Vue 3 + Vite
 │   ├── public/                   # Публичные файлы
