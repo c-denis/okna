@@ -89,3 +89,174 @@ docker-compose up -d
 5. Включена базовая инструкция по запуску
 
 Файл готов к размещению в корне репозитория. При необходимости можно добавить больше технических деталей в раздел установки.
+
+okna/
+├── .gitignore                    # Игнорируемые файлы для Git
+├── .env                          # Переменные окружения (SECRET_KEY, DB_URL, TELEGRAM_TOKEN)
+├── docker-compose.yml            # Конфигурация контейнеров (Django, Vue, PostgreSQL, Redis)
+├── README.md                     # Основная документация
+│
+├── backend/                      # Django-приложение
+│   ├── __init__.py
+│   ├── asgi.py                   # ASGI-конфигурация
+│   ├── wsgi.py                   # WSGI-конфигурация
+│   ├── settings/                 # Настройки (разделены по средам)
+│   │   ├── base.py               # Базовые настройки
+│   │   ├── production.py         # Продакшен-конфиг
+│   │   └── development.py        # Дев-конфиг
+│   │
+│   ├── api/                      # API v1
+│   │   ├── __init__.py
+│   │   ├── urls.py               # Все маршруты API
+│   │   ├── schemas/              # Схемы Pydantic
+│   │   │   ├── order.py          # Валидация заявок
+│   │   │   └── user.py           # Валидация пользователей
+│   │   │
+│   │   ├── views/                # Представления
+│   │   │   ├── auth.py           # Аутентификация
+│   │   │   ├── orders.py         # CRUD заявок
+│   │   │   ├── users.py          # Управление пользователями
+│   │   │   ├── locations.py      # Локации
+│   │   │   └── reports.py        # Отчеты (XLSX/PDF)
+│   │   │
+│   │   └── tests/                # API-тесты
+│   │       ├── test_orders.py
+│   │       └── test_users.py
+│   │
+│   ├── apps/                     # Django-приложения
+│   │   ├── core/                 # Ядро системы
+│   │   │   ├── models.py         # Базовые модели
+│   │   │   └── utils.py          # Утилиты (валидаторы)
+│   │   │
+│   │   ├── orders/               # Заявки
+│   │   │   ├── models.py         # Модель Order
+│   │   │   ├── admin.py          # Админка
+│   │   │   └── signals.py        # Сигналы (уведомления)
+│   │   │
+│   │   └── users/                # Пользователи
+│   │       ├── models.py         # Custom User Model
+│   │       └── permissions.py    # Права доступа
+│   │
+│   ├── config/                   # Конфигурация
+│   │   ├── celery.py             # Celery (асинхронные задачи)
+│   │   └── cache.py              # Кэширование (Redis)
+│   │
+│   ├── db/                       # Работа с БД
+│   │   ├── fixtures/             # Фикстуры
+│   │   └── seeders.py            # Наполнение тестовыми данными
+│   │
+│   ├── libs/                     # Внешние библиотеки
+│   │   └── telegram_api/         # Кастомная обертка для Telegram API
+│   │
+│   ├── locale/                   # Локализации
+│   │   └── ru/                   # Русский язык
+│   │
+│   ├── management/               # CLI-команды
+│   │   ├── commands/
+│   │   │   ├── backup_db.py      # Резервное копирование
+│   │   │   ├── create_admin.py   # Создание админа
+│   │   │   └── send_alerts.py    # Проверка уведомлений
+│   │   └── utils.py              # Утилиты для команд
+│   │
+│   ├── migrations/               # Миграции БД
+│   │   └── 0001_initial.py       # Первичные миграции
+│   │
+│   ├── static/                   # Статика
+│   │   ├── css/                  # Глобальные стили
+│   │   └── images/               # Изображения (логотипы)
+│   │
+│   ├── templates/                # Шаблоны (для email)
+│   │   └── emails/               # Письма
+│   │       ├── alert.html        # Шаблон уведомления
+│   │       └── base.html         # Базовый шаблон
+│   │
+│   ├── requirements/             # Зависимости
+│   │   ├── base.txt              # Основные
+│   │   ├── dev.txt               # Для разработки
+│   │   └── prod.txt              # Для продакшена
+│   │
+│   └── utils/                    # Вспомогательные скрипты
+│       ├── logging.py            # Настройка логов
+│       └── security.py           # Хелперы безопасности
+│
+├── frontend/                     # Vue 3 + Vite
+│   ├── public/                   # Публичные файлы
+│   │   ├── favicon.ico
+│   │   └── index.html            # Точка входа
+│   │
+│   ├── src/
+│   │   ├── assets/               # Ресурсы
+│   │   │   ├── fonts/            # Шрифты
+│   │   │   └── scss/             # Глобальные стили
+│   │   │
+│   │   ├── components/           # Компоненты UI
+│   │   │   ├── app/
+│   │   │   │   ├── AppHeader.vue # Шапка
+│   │   │   │   └── AppSidebar.vue # Меню
+│   │   │   │
+│   │   │   ├── orders/
+│   │   │   │   ├── OrderCard.vue # Карточка заявки
+│   │   │   │   └── OrderForm.vue # Форма создания
+│   │   │   │
+│   │   │   └── ui/
+│   │   │       ├── StatusBadge.vue # Бейдж статуса
+│   │   │       └── DatePicker.vue  # Выбор даты
+│   │   │
+│   │   ├── composables/          # Композаблы Vue 3
+│   │   │   ├── useApi.js         # HTTP-клиент
+│   │   │   └── useAuth.js        # Логика авторизации
+│   │   │
+│   │   ├── router/               # Маршруты
+│   │   │   └── index.js          # Конфигурация роутера
+│   │   │
+│   │   ├── stores/               # Pinia-сторе
+│   │   │   ├── orders.js         # Стор заявок
+│   │   │   └── users.js          # Стор пользователей
+│   │   │
+│   │   ├── views/                # Страницы
+│   │   │   ├── AuthView.vue      # Авторизация
+│   │   │   ├── OrdersView.vue    # Список заявок
+│   │   │   ├── ReportView.vue    # Отчеты
+│   │   │   └── UserProfile.vue   # Профиль
+│   │   │
+│   │   ├── App.vue               # Корневой компонент
+│   │   └── main.js               # Инициализация приложения
+│   │
+│   ├── .eslintrc.js              # Линтер
+│   ├── jsconfig.json             # Конфиг JavaScript
+│   ├── package.json              # Зависимости npm
+│   └── vite.config.js            # Конфиг сборки
+│
+├── infra/                        # Инфраструктура
+│   ├── nginx/                    # Конфиг Nginx
+│   │   └── default.conf
+│   │
+│   ├── postgres/                 # Конфиг PostgreSQL
+│   │   └── init.sql              # Инициализация БД
+│   │
+│   └── scripts/                  # Скрипты развертывания
+│       ├── deploy.sh             # Деплой
+│       └── migrate.sh            # Применение миграций
+│
+├── telegram_bot/                 # Бот для уведомлений
+│   ├── __init__.py
+│   ├── bot.py                    # Основной скрипт
+│   ├── handlers/                 # Обработчики
+│   │   ├── commands.py           # CLI-команды
+│   │   └── notifications.py      # Логика уведомлений
+│   │
+│   ├── services/                 # Сервисы
+│   │   └── order_notifier.py     # Уведомления о заявках
+│   │
+│   ├── tests/                    # Тесты
+│   │   └── test_handlers.py
+│   │
+│   └── requirements.txt          # Зависимости бота
+│
+└── tests/                        # Интеграционные тесты
+    ├── e2e/                      # End-to-end тесты
+    │   └── orders.test.js        # Тесты заявок
+    │
+    └── unit/                     # Юнит-тесты
+        ├── frontend/             # Тесты Vue
+        └── backend/              # Тесты Django
