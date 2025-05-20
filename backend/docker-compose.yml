@@ -1,37 +1,45 @@
-version: '3.8'
-
 services:
   web:
     build: .
-    command: sh -c "python -m gunicorn --bind 0.0.0.0:8000 crm_core.wsgi:application"
-    ports:
-      - "8000:8000"
+    platform: linux/amd64
+    command: >
+      sh -c "python manage.py migrate &&
+             python manage.py collectstatic --noinput &&
+             gunicorn --bind 0.0.0.0:8000 config.wsgi:application"
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@db:${DB_PORT:-5432}/${DB_NAME}
     volumes:
       - .:/app
-    environment:
-      - DATABASE_URL=postgres://postgres:password@db:5432/crm_db  # Исправлено имя БД
-      - PYTHONUNBUFFERED=1
-    restart: unless-stopped
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
-    # tty и stdin_open удалены (не нужны для production)
+    restart: no
 
   db:
     image: postgres:15
+    platform: linux/amd64
+    env_file: .env
     environment:
-      POSTGRES_USER: postgres  # Явное указание пользователя
-      POSTGRES_PASSWORD: ZxZx115511
-      POSTGRES_DB: crm_db
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d crm_db"]  # Проверка конкретной БД
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
     ports:
-      - "5432:5432"  # Для внешнего подключения (опционально)
+      - "5432:5432"
+    restart: unless-stopped
 
 volumes:
   postgres_data:
+  static_volume:
+  media_volume:

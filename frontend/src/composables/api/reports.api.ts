@@ -1,5 +1,5 @@
 import axios from '@/utils/httpClient';
-import type { ReportData, ManagerStats } from '@/types/reports';
+import type { ReportData, ManagerStats } from '@/types/reports.d';
 
 export default {
   /**

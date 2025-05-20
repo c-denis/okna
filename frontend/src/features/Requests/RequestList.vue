@@ -1,51 +1,84 @@
 <template>
-  <div v-if="loading" class="loading">Загрузка...</div>
-  <div v-else-if="error" class="error">{{ error }}</div>
-  <div v-else class="request-list">
-    <!-- Фильтры и поиск -->
-    <div class="filters">
+  <div class="request-list-container">
+    <!-- Фильтры -->
+    <div class="filters-section">
       <AppInput
-        v-model="searchQuery"
+        v-model="filters.search"
         placeholder="Поиск по клиенту или адресу"
+        icon="search"
         class="search-input"
       />
+
       <AppSelect
-        v-model="selectedStatus"
+        v-model="filters.status"
         :options="statusOptions"
         placeholder="Все статусы"
+        clearable
       />
+
       <AppSelect
-        v-model="selectedCity"
+        v-model="filters.city"
         :options="cityOptions"
         placeholder="Все города"
+        clearable
       />
-      <AppButton @click="resetFilters">Сбросить</AppButton>
+
+      <AppButton
+        variant="outlined"
+        @click="resetFilters"
+      >
+        Сбросить
+      </AppButton>
     </div>
 
+    <!-- Статус загрузки/ошибки -->
+    <div v-if="loading" class="status-message">
+      <AppSpinner size="medium" />
+      <span>Загрузка данных...</span>
+    </div>
+
+    <AppAlert
+      v-else-if="error"
+      type="error"
+      :message="error"
+      class="status-message"
+    />
+
     <!-- Таблица заявок -->
-    <AppTable :headers="headers" :items="filteredRequests">
+    <AppTable
+      v-else
+      :headers="tableHeaders"
+      :items="filteredRequests"
+      :empty-message="emptyMessage"
+      class="requests-table"
+    >
+      <!-- Слот для статуса с цветовой индикацией -->
       <template #cell-status="{ item }">
         <StatusBadge :status="item.status" />
-        <span v-if="item.isBlacklisted" class="blacklist-indicator"> (ЧС)</span>
+        <span v-if="item.is_blacklisted" class="blacklist-badge">
+          <AppIcon name="warning" color="error" size="small" />
+          Чёрный список
+        </span>
       </template>
+
+      <!-- Слот для действий -->
       <template #cell-actions="{ item }">
-        <div class="actions">
+        <div class="actions-cell">
           <AppButton
-            v-if="userRole === 'coordinator' && item.status === 'unassigned'"
+            v-if="canAssign(item)"
             size="small"
+            variant="text"
             @click="openAssignModal(item)"
           >
             Назначить
           </AppButton>
+
           <AppButton
-            v-if="
-              (userRole === 'manager' && item.status === 'assigned') ||
-              userRole === 'coordinator'
-            "
             size="small"
+            variant="text"
             @click="openDetailsModal(item)"
           >
-            Детали
+            Подробнее
           </AppButton>
         </div>
       </template>
@@ -54,7 +87,7 @@
     <!-- Модальное окно назначения -->
     <AssignModal
       v-if="showAssignModal"
-      :request="selectedRequest"
+      :request="selectedRequest!"
       :managers="availableManagers"
       @close="showAssignModal = false"
       @assign="handleAssign"
@@ -63,9 +96,9 @@
     <!-- Модальное окно деталей -->
     <RequestDetailsModal
       v-if="showDetailsModal"
-      :request="selectedRequest"
+      :request="selectedRequest!"
       @close="showDetailsModal = false"
-      @update-status="handleStatusUpdate"
+      @status-update="handleStatusUpdate"
       @blacklist="handleBlacklist"
     />
   </div>
@@ -76,8 +109,9 @@ import { computed, ref, onMounted } from 'vue';
 import { useRequestsStore } from '@/stores/requests.store';
 import { useUsersStore } from '@/stores/users.store';
 import { useAuthStore } from '@/stores/auth.store';
-import type { Request, RequestStatus } from '@/types/requests';
-import type { Manager } from '@/types/users';
+import { RequestStatus } from '@/types/requests';
+import AssignModal from './AssignModal.vue';
+import RequestDetailsModal from './RequestDetailsModal.vue';
 
 // Сторы
 const requestsStore = useRequestsStore();
@@ -85,79 +119,74 @@ const usersStore = useUsersStore();
 const authStore = useAuthStore();
 
 // Состояние
-const loading = ref(false);
-const error = ref<string | null>(null);
-const searchQuery = ref('');
-const selectedStatus = ref<RequestStatus | 'all'>('all');
-const selectedCity = ref<string>('all');
+const loading = computed(() => requestsStore.loading);
+const error = computed(() => requestsStore.error);
 const showAssignModal = ref(false);
 const showDetailsModal = ref(false);
 const selectedRequest = ref<Request | null>(null);
 
-// Заголовки таблицы
-const headers = [
-  { text: 'ID', value: 'id' },
-  { text: 'Клиент', value: 'clientName' },
-  { text: 'Телефон', value: 'phone' },
-  { text: 'Адрес', value: 'address' },
-  { text: 'Статус', value: 'status' },
-  { text: 'Дата', value: 'createdAt' },
-  { text: 'Действия', value: 'actions' },
-];
+// Фильтры
+const filters = computed({
+  get: () => requestsStore.filters,
+  set: (value) => requestsStore.setFilters(value)
+});
+
+// Данные
+const requests = computed(() => requestsStore.requests);
+const filteredRequests = computed(() => requestsStore.filteredRequests);
+const availableManagers = computed(() => usersStore.availableManagers);
+const userRole = computed(() => authStore.user?.role);
 
 // Опции фильтров
 const statusOptions = [
-  { value: 'all', text: 'Все статусы' },
-  { value: 'unassigned', text: 'Не назначена' },
-  { value: 'assigned', text: 'Назначена' },
-  { value: 'in_progress', text: 'В работе' },
-  { value: 'completed', text: 'Исполнена' },
-  { value: 'rejected', text: 'Отказ' },
+  { value: undefined, label: 'Все статусы' },
+  { value: RequestStatus.UNASSIGNED, label: 'Не назначена' },
+  { value: RequestStatus.ASSIGNED, label: 'Назначена' },
+  { value: RequestStatus.IN_PROGRESS, label: 'В работе' },
+  { value: RequestStatus.COMPLETED, label: 'Завершена' },
+  { value: RequestStatus.REJECTED, label: 'Отказ' }
 ];
 
-// Computed свойства
-const userRole = computed(() => authStore.user?.role);
-const allRequests = computed(() => requestsStore.requests);
 const cityOptions = computed(() => {
-  const cities = new Set(allRequests.value.map(r => r.city));
-  return [{ value: 'all', text: 'Все города' }, ...Array.from(cities).map(c => ({ value: c, text: c }))];
+  const cities = Array.from(new Set(requests.value.map(r => r.city).filter(Boolean));
+  return [
+    { value: undefined, label: 'Все города' },
+    ...cities.map(city => ({ value: city, label: city }))
+  ];
 });
 
-const availableManagers = computed(() => {
-  return usersStore.managers.filter(m => m.status === 'available');
-});
+// Заголовки таблицы
+const tableHeaders = [
+  { key: 'id', label: 'ID', width: '80px' },
+  { key: 'client_name', label: 'Клиент' },
+  { key: 'phone', label: 'Телефон' },
+  { key: 'address', label: 'Адрес' },
+  { key: 'status', label: 'Статус', width: '180px' },
+  { key: 'created_at', label: 'Дата создания', width: '150px' },
+  { key: 'actions', label: 'Действия', width: '180px', align: 'right' }
+];
 
-const filteredRequests = computed(() => {
-  return allRequests.value.filter(request => {
-    const matchesSearch =
-      request.clientName.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      request.address.toLowerCase().includes(searchQuery.value.toLowerCase());
-
-    const matchesStatus =
-      selectedStatus.value === 'all' || request.status === selectedStatus.value;
-
-    const matchesCity =
-      selectedCity.value === 'all' || request.city === selectedCity.value;
-
-    return matchesSearch && matchesStatus && matchesCity;
-  });
+const emptyMessage = computed(() => {
+  if (Object.values(filters.value).some(Boolean)) {
+    return 'Нет заявок, соответствующих фильтрам';
+  }
+  return 'Нет доступных заявок';
 });
 
 // Методы
 const fetchData = async () => {
-  loading.value = true;
-  error.value = null;
   try {
-    await requestsStore.fetchRequests();
-    if (userRole.value === 'coordinator') {
-      await usersStore.fetchManagers();
-    }
+    await Promise.all([
+      requestsStore.fetchRequests(),
+      userRole.value === 'coordinator' && usersStore.fetchManagers()
+    ]);
   } catch (err) {
-    error.value = 'Ошибка загрузки данных';
-    console.error(err);
-  } finally {
-    loading.value = false;
+    console.error('Ошибка загрузки данных:', err);
   }
+};
+
+const canAssign = (request: Request) => {
+  return userRole.value === 'coordinator' && request.status === RequestStatus.UNASSIGNED;
 };
 
 const openAssignModal = (request: Request) => {
@@ -170,31 +199,45 @@ const openDetailsModal = (request: Request) => {
   showDetailsModal.value = true;
 };
 
-const handleAssign = (managerId: string) => {
+const handleAssign = async (managerId: number) => {
   if (selectedRequest.value) {
-    requestsStore.assignRequest(selectedRequest.value.id, managerId);
-    showAssignModal.value = false;
+    try {
+      await requestsStore.assignRequest(selectedRequest.value.id, managerId);
+      showAssignModal.value = false;
+    } catch (err) {
+      console.error('Ошибка назначения:', err);
+    }
   }
 };
 
-const handleStatusUpdate = (status: RequestStatus) => {
+const handleStatusUpdate = async (status: RequestStatus, comment?: string) => {
   if (selectedRequest.value) {
-    requestsStore.updateRequestStatus(selectedRequest.value.id, status);
-    showDetailsModal.value = false;
+    try {
+      await requestsStore.updateRequestStatus(
+        selectedRequest.value.id,
+        status,
+        comment
+      );
+      showDetailsModal.value = false;
+    } catch (err) {
+      console.error('Ошибка обновления статуса:', err);
+    }
   }
 };
 
-const handleBlacklist = () => {
+const handleBlacklist = async (reason: string) => {
   if (selectedRequest.value) {
-    requestsStore.blacklistRequest(selectedRequest.value.id);
-    showDetailsModal.value = false;
+    try {
+      await requestsStore.addToBlacklist(selectedRequest.value.id, reason);
+      showDetailsModal.value = false;
+    } catch (err) {
+      console.error('Ошибка добавления в ЧС:', err);
+    }
   }
 };
 
 const resetFilters = () => {
-  searchQuery.value = '';
-  selectedStatus.value = 'all';
-  selectedCity.value = 'all';
+  requestsStore.resetFilters();
 };
 
 // Хуки жизненного цикла
@@ -202,39 +245,49 @@ onMounted(fetchData);
 </script>
 
 <style scoped>
-.request-list {
-  padding: 20px;
+.request-list-container {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-.filters {
+.filters-section {
   display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
+  gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .search-input {
   flex: 1;
-  max-width: 300px;
+  min-width: 250px;
+  max-width: 400px;
 }
 
-.actions {
+.status-message {
   display: flex;
+  align-items: center;
   gap: 8px;
+  padding: 16px;
 }
 
-.loading, .error {
-  padding: 20px;
-  text-align: center;
+.requests-table {
+  margin-top: 12px;
 }
 
-.error {
-  color: #d32f2f;
+.blacklist-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: var(--color-error);
+  font-size: 0.85rem;
 }
 
-.blacklist-indicator {
-  color: #f44336;
-  font-weight: bold;
-  margin-left: 4px;
+.actions-cell {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 </style>

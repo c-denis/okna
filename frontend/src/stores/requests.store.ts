@@ -1,140 +1,173 @@
 import { defineStore } from 'pinia';
-import axios from '@/utils/httpClient';
 import {
   fetchRequests as fetchRequestsApi,
   createRequest as createRequestApi,
   assignRequest as assignRequestApi,
   updateRequestStatus as updateRequestStatusApi,
-  getRequestDetails as getRequestDetailsApi
-} from '@/composables/api/requests.api';
-import type { Request, RequestData, RequestStatus } from '@/types/requests.d';
+  getRequestDetails as getRequestDetailsApi,
+  addToBlacklist as addToBlacklistApi,
+  type Request,
+  type RequestCreateData,
+  type RequestStatus,
+  type RequestFilterParams
+} from '@/api/requests.api';
+import { useAuthStore } from './auth.store';
 
 export const useRequestsStore = defineStore('requests', {
   state: () => ({
     requests: [] as Request[],
+    currentRequest: null as Request | null,
     loading: false,
     error: null as string | null,
-    currentRequest: null as Request | null
+    filters: {
+      status: undefined as RequestStatus | undefined,
+      city: undefined as string | undefined,
+      search: undefined as string | undefined,
+      date_from: undefined as string | undefined,
+      date_to: undefined as string | undefined
+    }
   }),
 
   actions: {
-    // Загрузка всех заявок
-    async fetchRequests() {
+    async fetchRequests(params?: RequestFilterParams) {
       this.loading = true;
       this.error = null;
       try {
-        const response = await fetchRequestsApi();
-        this.requests = response.data;
+        const effectiveParams = { ...this.filters, ...params };
+        this.requests = await fetchRequestsApi(effectiveParams);
       } catch (error) {
-        this.error = 'Ошибка загрузки заявок';
-        console.error(error);
+        this.error = error instanceof Error ? error.message : 'Ошибка загрузки заявок';
         throw error;
       } finally {
         this.loading = false;
       }
     },
 
-    // Создание новой заявки
-    async createRequest(requestData: RequestData) {
+    async createRequest(requestData: RequestCreateData) {
       this.loading = true;
       try {
-        const response = await createRequestApi(requestData);
-        this.requests.unshift(response.data);
-        return response.data;
+        const newRequest = await createRequestApi(requestData);
+        this.requests.unshift(newRequest);
+        return newRequest;
       } catch (error) {
-        this.error = 'Ошибка создания заявки';
-        console.error(error);
+        this.error = error instanceof Error ? error.message : 'Ошибка создания заявки';
         throw error;
       } finally {
         this.loading = false;
       }
     },
 
-    // Назначение заявки менеджеру
-    async assignRequest(requestId: string, managerId: string) {
+    async assignRequest(requestId: number, managerId: number) {
       try {
-        await assignRequestApi(requestId, managerId);
-        const request = this.requests.find(r => r.id === requestId);
-        if (request) {
-          request.status = 'assigned';
-          request.managerId = managerId;
-        }
+        const updatedRequest = await assignRequestApi(requestId, managerId);
+        this.updateRequestInStore(updatedRequest);
+        return updatedRequest;
       } catch (error) {
-        this.error = 'Ошибка назначения заявки';
-        console.error(error);
+        this.error = error instanceof Error ? error.message : 'Ошибка назначения заявки';
         throw error;
       }
     },
 
-    // Обновление статуса заявки
-    async updateRequestStatus(requestId: string, status: RequestStatus) {
+    async updateRequestStatus(requestId: number, status: RequestStatus, comment?: string) {
       try {
-        await updateRequestStatusApi(requestId, status);
-        const request = this.requests.find(r => r.id === requestId);
-        if (request) {
-          request.status = status;
-          request.updatedAt = new Date().toISOString();
-        }
+        const updatedRequest = await updateRequestStatusApi(requestId, status, comment);
+        this.updateRequestInStore(updatedRequest);
+        return updatedRequest;
       } catch (error) {
-        this.error = 'Ошибка обновления статуса';
-        console.error(error);
+        this.error = error instanceof Error ? error.message : 'Ошибка обновления статуса';
         throw error;
       }
     },
 
-    // Добавление клиента в черный список
-    async blacklistRequest(requestId: string) {
-      try {
-        await axios.patch(`/requests/${requestId}/blacklist`);
-        const request = this.requests.find(r => r.id === requestId);
-        if (request) {
-          request.isBlacklisted = true;
-        }
-      } catch (error) {
-        this.error = 'Ошибка добавления в черный список';
-        console.error(error);
-        throw error;
-      }
-    },
-
-    // Загрузка деталей конкретной заявки
-    async fetchRequestDetails(requestId: string) {
+    async fetchRequestDetails(requestId: number) {
       this.loading = true;
       try {
-        const response = await getRequestDetailsApi(requestId);
-        this.currentRequest = response.data;
-        return response.data;
+        this.currentRequest = await getRequestDetailsApi(requestId);
+        return this.currentRequest;
       } catch (error) {
-        this.error = 'Ошибка загрузки деталей заявки';
-        console.error(error);
+        this.error = error instanceof Error ? error.message : 'Ошибка загрузки деталей';
         throw error;
       } finally {
         this.loading = false;
       }
     },
 
-    // Сброс текущей заявки
+    async addToBlacklist(requestId: number, reason: string) {
+      try {
+        const updatedRequest = await addToBlacklistApi(requestId, reason);
+        this.updateRequestInStore(updatedRequest);
+        return updatedRequest;
+      } catch (error) {
+        this.error = error instanceof Error ? error.message : 'Ошибка добавления в ЧС';
+        throw error;
+      }
+    },
+
+    updateRequestInStore(updatedRequest: Request) {
+      const index = this.requests.findIndex(r => r.id === updatedRequest.id);
+      if (index !== -1) {
+        this.requests.splice(index, 1, updatedRequest);
+      }
+      if (this.currentRequest?.id === updatedRequest.id) {
+        this.currentRequest = updatedRequest;
+      }
+    },
+
     resetCurrentRequest() {
       this.currentRequest = null;
+    },
+
+    setFilter<K extends keyof typeof this.filters>(key: K, value: typeof this.filters[K]) {
+      this.filters[key] = value;
+    },
+
+    resetFilters() {
+      this.filters = {
+        status: undefined,
+        city: undefined,
+        search: undefined,
+        date_from: undefined,
+        date_to: undefined
+      };
     }
   },
 
   getters: {
-    // Получение заявок по статусу
-    getRequestsByStatus: (state) => {
-      return (status: RequestStatus) => state.requests.filter(r => r.status === status);
+    filteredRequests(state) {
+      return state.requests.filter(request => {
+        const matchesSearch = !state.filters.search ||
+          request.client_name.toLowerCase().includes(state.filters.search.toLowerCase()) ||
+          request.address.toLowerCase().includes(state.filters.search.toLowerCase());
+
+        const matchesStatus = !state.filters.status ||
+          request.status === state.filters.status;
+
+        const matchesCity = !state.filters.city ||
+          request.city === state.filters.city;
+
+        return matchesSearch && matchesStatus && matchesCity;
+      });
     },
 
-    // Получение заявки по ID
-    getRequestById: (state) => {
-      return (id: string) => state.requests.find(r => r.id === id);
+    unassignedRequests(state) {
+      return state.requests.filter(r => r.status === 'unassigned');
     },
 
-    // Получение незавершенных заявок
-    getActiveRequests: (state) => {
-      return state.requests.filter(r =>
-        ['unassigned', 'assigned', 'in_progress'].includes(r.status)
-      );
+    assignedRequests(state) {
+      return state.requests.filter(r => r.status === 'assigned');
+    },
+
+    inProgressRequests(state) {
+      return state.requests.filter(r => r.status === 'in_progress');
+    },
+
+    getRequestById(state) {
+      return (id: number) => state.requests.find(r => r.id === id);
+    },
+
+    userCanEdit(state) {
+      const authStore = useAuthStore();
+      return authStore.user?.role === 'coordinator' || authStore.user?.role === 'admin';
     }
   }
 });

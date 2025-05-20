@@ -1,156 +1,466 @@
 <template>
   <div class="report-view">
-    <h2>Сводная статистика</h2>
+    <div class="report-header">
+      <h2>Отчеты по заявкам</h2>
 
-    <div class="stats-grid">
-      <div class="stat-card" v-for="stat in stats" :key="stat.title">
-        <h3>{{ stat.title }}</h3>
-        <p class="stat-value">{{ stat.value }}</p>
-        <p class="stat-change" :class="stat.trend">
-          {{ stat.change }}% <span v-if="stat.trend === 'up'">↑</span>
-          <span v-else-if="stat.trend === 'down'">↓</span>
-        </p>
+      <div class="report-filters">
+        <AppSelect
+          v-model="period"
+          :options="periodOptions"
+          label="Период"
+          class="filter-select"
+        />
+
+        <AppDatePicker
+          v-if="period === 'custom'"
+          v-model="customDates"
+          range
+          placeholder="Выберите даты"
+          class="filter-datepicker"
+        />
+
+        <AppSelect
+          v-model="selectedCity"
+          :options="cityOptions"
+          label="Город"
+          clearable
+          class="filter-select"
+        />
+
+        <AppButton
+          @click="exportToExcel"
+          variant="outlined"
+          icon="download"
+        >
+          Экспорт
+        </AppButton>
       </div>
     </div>
 
-    <div class="charts">
+    <!-- Статистические карточки -->
+    <div class="stats-grid">
+      <StatCard
+        title="Всего заявок"
+        :value="reportData?.total_orders || 0"
+        :change="reportData?.order_change_percent || 0"
+        icon="assignment"
+      />
+
+      <StatCard
+        title="Выполнено"
+        :value="reportData?.completed_orders || 0"
+        :change="reportData?.completed_change_percent || 0"
+        icon="check_circle"
+        color="success"
+      />
+
+      <StatCard
+        title="Отказы"
+        :value="reportData?.rejected_orders || 0"
+        :change="reportData?.rejected_change_percent || 0"
+        icon="cancel"
+        color="error"
+      />
+
+      <StatCard
+        title="Среднее время"
+        :value="formatDuration(reportData?.avg_completion_time)"
+        :change="reportData?.time_change_percent || 0"
+        icon="schedule"
+        color="info"
+      />
+    </div>
+
+    <!-- Основные графики -->
+    <div class="charts-section">
       <div class="chart-container">
-        <h3>Заявки по статусам</h3>
+        <div class="chart-header">
+          <h3>Распределение по статусам</h3>
+          <AppSelect
+            v-model="statusChartType"
+            :options="chartTypeOptions"
+            size="small"
+          />
+        </div>
         <canvas ref="statusChart"></canvas>
       </div>
+
       <div class="chart-container">
-        <h3>Заявки по городам</h3>
+        <div class="chart-header">
+          <h3>Заявки по городам</h3>
+          <AppSelect
+            v-model="cityChartType"
+            :options="chartTypeOptions"
+            size="small"
+          />
+        </div>
         <canvas ref="cityChart"></canvas>
       </div>
     </div>
+
+    <!-- Таблица с детализацией -->
+    <div class="details-section">
+      <h3>Детализация по менеджерам</h3>
+      <AppTable
+        :headers="managerHeaders"
+        :items="reportData?.managers_stats || []"
+        :loading="loading"
+        class="manager-table"
+      >
+        <template #cell-efficiency="{ item }">
+          <AppProgress
+            :value="item.efficiency"
+            :max="100"
+            show-value
+            :color="getEfficiencyColor(item.efficiency)"
+          />
+        </template>
+
+        <template #cell-actions="{ item }">
+          <AppButton
+            size="small"
+            variant="text"
+            @click="showManagerDetails(item.id)"
+          >
+            Детали
+          </AppButton>
+        </template>
+      </AppTable>
+    </div>
+
+    <!-- Модальное окно с детализацией по менеджеру -->
+    <ManagerReportModal
+      v-if="selectedManager"
+      :manager-id="selectedManager"
+      :period="activePeriod"
+      @close="selectedManager = null"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
-import Chart from 'chart.js/auto';
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { useReportsStore } from '@/stores/reports.store'
+import { useLocationsStore } from '@/stores/locations.store'
+import { Chart } from 'chart.js/auto'
+import { exportToExcel } from '@/utils/exporter'
+import StatCard from '@/components/reports/StatCard.vue'
+import ManagerReportModal from '@/components/reports/ManagerReportModal.vue'
 
-const props = defineProps({
-  data: {
-    type: Object,
-    required: true
+// Сторы
+const reportsStore = useReportsStore()
+const locationsStore = useLocationsStore()
+
+// Реактивные данные
+const period = ref('week')
+const customDates = ref([])
+const selectedCity = ref(null)
+const statusChart = ref(null)
+const cityChart = ref(null)
+const statusChartType = ref('doughnut')
+const cityChartType = ref('bar')
+const loading = ref(false)
+const selectedManager = ref(null)
+
+// Опции фильтров
+const periodOptions = [
+  { value: 'today', label: 'Сегодня' },
+  { value: 'week', label: 'Неделя' },
+  { value: 'month', label: 'Месяц' },
+  { value: 'quarter', label: 'Квартал' },
+  { value: 'year', label: 'Год' },
+  { value: 'custom', label: 'Произвольный период' }
+]
+
+const chartTypeOptions = [
+  { value: 'bar', label: 'Гистограмма' },
+  { value: 'doughnut', label: 'Кольцевая' },
+  { value: 'pie', label: 'Круговая' },
+  { value: 'line', label: 'Линейная' }
+]
+
+const managerHeaders = [
+  { text: 'Менеджер', value: 'name' },
+  { text: 'Заявок', value: 'total_orders' },
+  { text: 'Выполнено', value: 'completed' },
+  { text: 'Отказов', value: 'rejected' },
+  { text: 'Эффективность', value: 'efficiency' },
+  { text: 'Действия', value: 'actions', align: 'right' }
+]
+
+// Вычисляемые свойства
+const activePeriod = computed(() => {
+  if (period.value !== 'custom') return period.value
+
+  return {
+    start: customDates.value[0],
+    end: customDates.value[1]
   }
-});
+})
 
-const statusChart = ref(null);
-const cityChart = ref(null);
+const cityOptions = computed(() => {
+  return locationsStore.cities.map(city => ({
+    value: city.id,
+    label: city.name
+  }))
+})
 
-const stats = ref([
-  { title: 'Всего заявок', value: 124, change: 12, trend: 'up' },
-  { title: 'Выполнено', value: 89, change: 5, trend: 'up' },
-  { title: 'Отказов', value: 12, change: -3, trend: 'down' },
-  { title: 'Среднее время', value: '2ч 15м', change: -10, trend: 'down' }
-]);
+const reportData = computed(() => reportsStore.currentReport)
 
-onMounted(() => {
-  renderCharts();
-});
+// Инициализация данных
+onMounted(async () => {
+  await locationsStore.fetchCities()
+  fetchReportData()
+})
+
+// Отслеживание изменений фильтров
+watch([period, customDates, selectedCity], () => {
+  fetchReportData()
+}, { deep: true })
+
+// Методы
+const fetchReportData = async () => {
+  loading.value = true
+
+  try {
+    await reportsStore.fetchReport({
+      period: activePeriod.value,
+      city_id: selectedCity.value
+    })
+
+    renderCharts()
+  } catch (error) {
+    console.error('Ошибка загрузки отчета:', error)
+  } finally {
+    loading.value = false
+  }
+}
 
 const renderCharts = () => {
-  // Статусы заявок
-  new Chart(statusChart.value, {
-    type: 'doughnut',
-    data: {
-      labels: ['Новые', 'Назначенные', 'В работе', 'Завершенные', 'Отказы'],
-      datasets: [{
-        data: [15, 22, 18, 89, 12],
-        backgroundColor: [
-          '#FFC107',
-          '#2196F3',
-          '#4CAF50',
-          '#607D8B',
-          '#F44336'
-        ]
-      }]
-    }
-  });
+  // Уничтожаем предыдущие графики
+  if (statusChart.value?.chart) statusChart.value.chart.destroy()
+  if (cityChart.value?.chart) cityChart.value.chart.destroy()
 
-  // Заявки по городам
-  new Chart(cityChart.value, {
-    type: 'bar',
-    data: {
-      labels: ['Москва', 'СПб', 'Казань', 'Екатеринбург', 'Новосибирск'],
-      datasets: [{
-        label: 'Заявки',
-        data: [45, 32, 18, 15, 14],
-        backgroundColor: '#2196F3'
-      }]
-    },
-    options: {
-      responsive: true,
-      scales: {
-        y: {
-          beginAtZero: true
+  // Данные для графиков
+  const statusData = reportData.value?.status_stats || []
+  const cityData = reportData.value?.city_stats || []
+
+  // График статусов
+  if (statusChart.value) {
+    statusChart.value.chart = new Chart(statusChart.value, {
+      type: statusChartType.value,
+      data: {
+        labels: statusData.map(s => s.status_name),
+        datasets: [{
+          label: 'Заявки',
+          data: statusData.map(s => s.count),
+          backgroundColor: [
+            '#FFC107', // Новые
+            '#2196F3', // Назначенные
+            '#4CAF50', // В работе
+            '#607D8B', // Завершенные
+            '#F44336'  // Отказы
+          ],
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            position: 'right'
+          },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const total = context.dataset.data.reduce((a, b) => a + b, 0)
+                const value = context.raw
+                const percentage = Math.round((value / total) * 100)
+                return `${context.label}: ${value} (${percentage}%)`
+              }
+            }
+          }
         }
       }
-    }
-  });
-};
+    })
+  }
+
+  // График по городам
+  if (cityChart.value) {
+    cityChart.value.chart = new Chart(cityChart.value, {
+      type: cityChartType.value,
+      data: {
+        labels: cityData.map(c => c.city_name),
+        datasets: [{
+          label: 'Заявки',
+          data: cityData.map(c => c.count),
+          backgroundColor: '#2196F3',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        },
+        plugins: {
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                const total = cityData.reduce((sum, item) => sum + item.count, 0)
+                const percentage = Math.round((context.raw / total) * 100)
+                return `${context.label}: ${context.raw} (${percentage}%)`
+              }
+            }
+          }
+        }
+      }
+    })
+  }
+}
+
+const formatDuration = (seconds) => {
+  if (!seconds) return '0ч 0м'
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  return `${hours}ч ${minutes}м`
+}
+
+const getEfficiencyColor = (value) => {
+  if (value >= 90) return 'success'
+  if (value >= 70) return 'warning'
+  return 'error'
+}
+
+const showManagerDetails = (managerId) => {
+  selectedManager.value = managerId
+}
+
+const exportToExcel = () => {
+  if (!reportData.value) return
+
+  const data = [
+    ['Отчет по заявкам', `Период: ${periodOptions.find(p => p.value === period.value)?.label}`],
+    [],
+    ['Всего заявок', reportData.value.total_orders],
+    ['Выполнено', reportData.value.completed_orders],
+    ['Отказов', reportData.value.rejected_orders],
+    ['Среднее время выполнения', formatDuration(reportData.value.avg_completion_time)],
+    [],
+    ['Статус', 'Количество'],
+    ...(reportData.value.status_stats?.map(s => [s.status_name, s.count]) || []),
+    [],
+    ['Город', 'Количество'],
+    ...(reportData.value.city_stats?.map(c => [c.city_name, c.count]) || []),
+    [],
+    ['Менеджер', 'Всего', 'Выполнено', 'Отказов', 'Эффективность'],
+    ...(reportData.value.managers_stats?.map(m => [
+      m.name,
+      m.total_orders,
+      m.completed,
+      m.rejected,
+      `${m.efficiency}%`
+    ]) || [])
+  ]
+
+  exportToExcel(data, `Отчет_${new Date().toISOString().slice(0,10)}`)
+}
+
+// Очистка при размонтировании
+onBeforeUnmount(() => {
+  if (statusChart.value?.chart) statusChart.value.chart.destroy()
+  if (cityChart.value?.chart) cityChart.value.chart.destroy()
+})
 </script>
 
 <style scoped>
 .report-view {
-  padding: 20px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.report-filters {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-select {
+  min-width: 180px;
+}
+
+.filter-datepicker {
+  min-width: 250px;
 }
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 16px;
-  margin: 20px 0;
 }
 
-.stat-card {
-  background: white;
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-}
-
-.stat-value {
-  font-size: 1.8rem;
-  font-weight: bold;
-  margin: 8px 0;
-}
-
-.stat-change {
-  font-size: 0.9rem;
-}
-
-.stat-change.up {
-  color: #4CAF50;
-}
-
-.stat-change.down {
-  color: #F44336;
-}
-
-.charts {
+.charts-section {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 30px;
+  gap: 24px;
 }
 
 .chart-container {
-  background: white;
-  padding: 16px;
+  background: var(--color-background-soft);
   border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  padding: 16px;
+  height: 400px;
+  display: flex;
+  flex-direction: column;
+}
+
+.chart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.details-section {
+  margin-top: 24px;
+}
+
+.manager-table {
+  margin-top: 16px;
+}
+
+@media (max-width: 1200px) {
+  .charts-section {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
-  .charts {
-    grid-template-columns: 1fr;
+  .report-header {
+    flex-direction: column;
+    align-items: flex-start;
   }
 
-  .stats-grid {
-    grid-template-columns: 1fr 1fr;
+  .report-filters {
+    width: 100%;
+  }
+
+  .filter-select,
+  .filter-datepicker {
+    width: 100%;
   }
 }
 </style>
