@@ -1,8 +1,8 @@
 from rest_framework import serializers
-from ...models import BlacklistEntry, Order
-from ...services.blacklist_service import BlacklistService
+from crm.models import Blacklist, Order
+from crm.services.blacklist_service import BlacklistService
 
-class BlacklistEntrySerializer(serializers.ModelSerializer):
+class BlacklistSerializer(serializers.ModelSerializer):
     """
     Сериализатор для записей черного списка.
     Включает все поля модели и дополнительные computed-поля.
@@ -10,7 +10,7 @@ class BlacklistEntrySerializer(serializers.ModelSerializer):
     related_orders_count = serializers.SerializerMethodField()
     
     class Meta:
-        model = BlacklistEntry
+        model = Blacklist
         fields = [
             'id',
             'client_name',

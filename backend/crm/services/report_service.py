@@ -1,4 +1,6 @@
-from django.db.models import Count, Q
+from django.db.models import Count, Q, Avg, Case, When, F
+from django.db.models.functions import Extract
+from django.db.models.fields import DurationField
 from django.utils import timezone
 from datetime import timedelta
 from ..models import Order, City
@@ -35,13 +37,10 @@ class ReportService:
         Returns:
             dict: Данные отчета
         """
-        # Определяем временной диапазон
         date_range = cls._get_date_range(period, date_from, date_to)
         
-        # Базовый запрос
         orders = Order.objects.filter(created_at__range=date_range)
         
-        # Группировка по городам
         by_city = orders.values('address__city__name').annotate(
             total=Count('id'),
             completed=Count('id', filter=Q(status='completed')),
@@ -49,7 +48,6 @@ class ReportService:
             in_progress=Count('id', filter=Q(status='in_progress'))
         ).order_by('-total')
         
-        # Общая статистика
         total_stats = {
             'total': orders.count(),
             'completed': orders.filter(status='completed').count(),
@@ -81,11 +79,14 @@ class ReportService:
         """
         date_range = cls._get_date_range(period, date_from, date_to)
         
-        # Статистика по менеджерам
         managers_stats = Order.objects.filter(
             created_at__range=date_range,
             assigned_to__isnull=False
-        ).values('assigned_to__username', 'assigned_to__first_name', 'assigned_to__last_name').annotate(
+        ).values(
+            'assigned_to__username', 
+            'assigned_to__first_name', 
+            'assigned_to__last_name'
+        ).annotate(
             total=Count('id'),
             completed=Count('id', filter=Q(status='completed')),
             rejected=Count('id', filter=Q(status='rejected')),
@@ -130,10 +131,13 @@ class ReportService:
             start = today - timedelta(days=today.weekday() + 7)
             return (start, start + timedelta(days=7))
         elif period == 'month':
-            return (today.replace(day=1), today.replace(day=1) + timedelta(days=32)).replace(day=1))
+            first_day = today.replace(day=1)
+            next_month = (first_day + timedelta(days=32)).replace(day=1)
+            return (first_day, next_month)
         elif period == 'last_month':
-            first = today.replace(day=1) - timedelta(days=1)
-            return (first.replace(day=1), today.replace(day=1))
+            first_day = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+            last_day = today.replace(day=1)
+            return (first_day, last_day)
         elif period == 'custom' and date_from and date_to:
             return (date_from, date_to)
         else:

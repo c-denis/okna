@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import Group
-from ...models import User, ManagerStatus
+from crm.models import User, ManagerStatus
 
 class ManagerStatusSerializer(serializers.ModelSerializer):
     """

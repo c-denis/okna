@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import City, Address
+from crm.models import City, Address
 
 class CitySerializer(serializers.ModelSerializer):
     """

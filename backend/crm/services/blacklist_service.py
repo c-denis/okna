@@ -1,4 +1,4 @@
-from ..models import BlacklistEntry, Order
+from ..models import Blacklist, Order
 from ..signals import client_blacklisted, client_unblocked
 
 class BlacklistService:
@@ -14,7 +14,7 @@ class BlacklistService:
         2. Помечает связанные заявки
         3. Отправляет сигналы
         """
-        entry, created = BlacklistEntry.objects.update_or_create(
+        entry, created = Blacklist.objects.update_or_create(
             client_name=client_name,
             phone=phone,
             defaults={'reason': reason}

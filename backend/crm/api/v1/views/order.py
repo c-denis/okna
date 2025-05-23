@@ -1,10 +1,10 @@
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from ...models import Order
+from crm.models import Order
 from ..serializers import OrderSerializer
-from ...services.order_service import OrderService
-from ...services.notification_service import NotificationService
+from crm.services.order_service import OrderService
+from crm.services.notification_service import NotificationService
 
 class OrderViewSet(viewsets.ModelViewSet):
     """

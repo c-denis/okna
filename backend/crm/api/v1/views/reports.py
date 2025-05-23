@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions
 from rest_framework.response import Response
-from ...services.report_service import ReportService
+from crm.services.report_service import ReportService
 
 class OrderReportViewSet(viewsets.ViewSet):
     """

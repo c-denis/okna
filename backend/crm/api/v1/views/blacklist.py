@@ -1,27 +1,27 @@
-from rest_framework import viewsets, status
+from rest_framework import viewsets, status, serializers  # Добавлен импорт serializers
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from ...models import BlacklistEntry, Order
-from .serializers.blacklist import (
-    BlacklistEntrySerializer,
+from crm.models import Blacklist, Order
+from ..serializers.blacklist import (
+    BlacklistSerializer,
     AddToBlacklistSerializer
 )
-from ...permissions import IsCoordinatorOrHigher
-from ...services.blacklist_service import BlacklistService
+from ..permissions import IsCoordinator
+from crm.services.blacklist_service import BlacklistService  # Исправлен относительный импорт
 
 class BlacklistViewSet(viewsets.ModelViewSet):
     """
     ViewSet для работы с черным списком клиентов.
     Доступен только координаторам и администраторам.
     """
-    queryset = BlacklistEntry.objects.all().order_by('-created_at')
-    serializer_class = BlacklistEntrySerializer
-    permission_classes = [IsCoordinatorOrHigher]
+    queryset = Blacklist.objects.all().order_by('-created_at')
+    serializer_class = BlacklistSerializer
+    permission_classes = [IsCoordinator]
 
     @action(
         detail=True,
         methods=['post'],
-        serializer_class=serializers.Serializer
+        serializer_class=serializers.Serializer  # Теперь serializers импортирован
     )
     def unblock(self, request, pk=None):
         """
@@ -51,7 +51,7 @@ class BlacklistViewSet(viewsets.ModelViewSet):
         
         entry = serializer.save()
         return Response(
-            BlacklistEntrySerializer(entry).data,
+            BlacklistSerializer(entry).data,
             status=status.HTTP_201_CREATED
         )
 
@@ -59,7 +59,8 @@ class OrderBlacklistView(viewsets.GenericViewSet):
     """
     Отдельный ViewSet для черного списка в контексте заявки.
     """
-    permission_classes = [IsCoordinatorOrHigher]
+    queryset = Order.objects.all()  # Добавлен queryset
+    permission_classes = [IsCoordinator]
 
     @action(
         detail=True,
@@ -79,6 +80,6 @@ class OrderBlacklistView(viewsets.GenericViewSet):
         
         entry = serializer.save()
         return Response(
-            BlacklistEntrySerializer(entry).data,
+            BlacklistSerializer(entry).data,
             status=status.HTTP_201_CREATED
         )

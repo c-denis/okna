@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import Order, StatusHistory
+from crm.models import Order, StatusHistory
 from .user import UserSerializer
 from .location import AddressSerializer
 

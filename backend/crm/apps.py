@@ -10,4 +10,5 @@ class CRMConfig(AppConfig):
         from .services import notification_service
         
         # Инициализация Telegram бота при запуске приложения
-        notification_service.initialize_bot()
+        from crm.services.notification_service import NotificationService
+        NotificationService.initialize_bot()

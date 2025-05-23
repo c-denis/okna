@@ -1,5 +1,5 @@
 from rest_framework import viewsets, permissions
-from ...models import ManagerStatus
+from crm.models import ManagerStatus
 from ..serializers import ManagerStatusSerializer
 
 class ManagerStatusViewSet(viewsets.ModelViewSet):

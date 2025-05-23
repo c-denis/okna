@@ -3,7 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 from .models import (
     Order,
     User,
-    Location,
+    City, 
+    Address,  # Используем Address вместо Location
     Blacklist,
     ManagerStatus,
     NotificationLog
@@ -57,9 +58,10 @@ class CustomUserAdmin(UserAdmin):
         return obj.managerstatus.status if hasattr(obj, 'managerstatus') else '-'
     get_status.short_description = 'Статус менеджера'
 
-class LocationAdmin(admin.ModelAdmin):
+# Заменяем LocationAdmin на AddressAdmin
+class AddressAdmin(admin.ModelAdmin):
     list_display = ('city', 'street', 'house', 'apartment')
-    search_fields = ('city', 'street')
+    search_fields = ('street', 'house', 'apartment')
     list_filter = ('city',)
 
 class BlacklistAdmin(admin.ModelAdmin):
@@ -80,7 +82,8 @@ class NotificationLogAdmin(admin.ModelAdmin):
 # Регистрация моделей
 admin.site.register(Order, OrderAdmin)
 admin.site.register(User, CustomUserAdmin)
-admin.site.register(Location, LocationAdmin)
+admin.site.register(City)  # Регистрируем City без кастомного админ-класса
+admin.site.register(Address, AddressAdmin)  # Регистрируем Address с кастомным админ-классом
 admin.site.register(Blacklist, BlacklistAdmin)
 admin.site.register(ManagerStatus, ManagerStatusAdmin)
 admin.site.register(NotificationLog, NotificationLogAdmin)

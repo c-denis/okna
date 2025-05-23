@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from ...models import NotificationLog
+from crm.models import NotificationLog
 from .user import UserSerializer
 from .order import OrderSerializer
 

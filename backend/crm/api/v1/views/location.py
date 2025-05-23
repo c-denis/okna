@@ -1,7 +1,9 @@
-from rest_framework import viewsets, permissions
-from ...models import City, Address
-from ..serializers import CitySerializer, AddressSerializer
-from ...services.fias_integration import FIASIntegration
+from rest_framework import viewsets, permissions, status
+from rest_framework.decorators import action  # Добавлен импорт action
+from rest_framework.response import Response  # Добавлен импорт Response
+from crm.models import City
+from ..serializers import CitySerializer
+from crm.services.fias_integration import FIASIntegration
 
 class LocationViewSet(viewsets.ModelViewSet):
     """

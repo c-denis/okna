@@ -1,7 +1,7 @@
 from django.db import models
 from .order import Order
 
-class BlacklistEntry(models.Model):
+class Blacklist(models.Model):
     """
     Модель записи в черном списке.
     Связана с заявками через ManyToMany.
