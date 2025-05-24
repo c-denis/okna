@@ -1,6 +1,6 @@
 <template>
   <div class="request-list-container">
-    <!-- Фильтры -->
+    <!-- Секция фильтров -->
     <div class="filters-section">
       <AppInput
         v-model="filters.search"
@@ -17,8 +17,8 @@
       />
 
       <AppSelect
-        v-model="filters.city"
-        :options="cityOptions"
+        v-model="filters.city_id"
+        :options="cityOptionsWithTypes"
         placeholder="Все города"
         clearable
       />
@@ -31,12 +31,13 @@
       </AppButton>
     </div>
 
-    <!-- Статус загрузки/ошибки -->
+    <!-- Статус загрузки -->
     <div v-if="loading" class="status-message">
       <AppSpinner size="medium" />
       <span>Загрузка данных...</span>
     </div>
 
+    <!-- Отображение ошибок -->
     <AppAlert
       v-else-if="error"
       type="error"
@@ -48,11 +49,10 @@
     <AppTable
       v-else
       :headers="tableHeaders"
-      :items="filteredRequests"
+      :items="requestsAsRecordArray"
       :empty-message="emptyMessage"
       class="requests-table"
     >
-      <!-- Слот для статуса с цветовой индикацией -->
       <template #cell-status="{ item }">
         <StatusBadge :status="item.status" />
         <span v-if="item.is_blacklisted" class="blacklist-badge">
@@ -61,7 +61,6 @@
         </span>
       </template>
 
-      <!-- Слот для действий -->
       <template #cell-actions="{ item }">
         <div class="actions-cell">
           <AppButton
@@ -84,131 +83,158 @@
       </template>
     </AppTable>
 
-    <!-- Модальное окно назначения -->
     <AssignModal
-      v-if="showAssignModal"
-      :request="selectedRequest!"
+      v-if="showAssignModal && selectedRequest"
+      :request="selectedRequest"
       :managers="availableManagers"
       @close="showAssignModal = false"
       @assign="handleAssign"
     />
 
-    <!-- Модальное окно деталей -->
     <RequestDetailsModal
-      v-if="showDetailsModal"
-      :request="selectedRequest!"
+      v-if="showDetailsModal && selectedRequest"
+      :request="selectedRequest"
       @close="showDetailsModal = false"
       @status-update="handleStatusUpdate"
-      @blacklist="handleBlacklist"
+      @blacklist="handleBlacklistPrompt"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
-import { useRequestsStore } from '@/stores/requests.store';
-import { useUsersStore } from '@/stores/users.store';
-import { useAuthStore } from '@/stores/auth.store';
-import { RequestStatus } from '@/types/requests';
-import AssignModal from './AssignModal.vue';
-import RequestDetailsModal from './RequestDetailsModal.vue';
+import { computed, ref, onMounted } from 'vue'
+import { useRequestsStore } from '@/stores/requests.store'
+import { useUsersStore } from '@/stores/user.store'
+import { useAuthStore } from '@/stores/auth.store'
+import { RequestStatus } from '@/types/requests'
+import type { Request } from '@/types/requests'
+import AssignModal from './AssignModal.vue'
+import RequestDetailsModal from './RequestDetailsModal.vue'
 
-// Сторы
-const requestsStore = useRequestsStore();
-const usersStore = useUsersStore();
-const authStore = useAuthStore();
+// Инициализация хранилищ
+const requestsStore = useRequestsStore()
+const usersStore = useUsersStore()
+const authStore = useAuthStore()
 
-// Состояние
-const loading = computed(() => requestsStore.loading);
-const error = computed(() => requestsStore.error);
-const showAssignModal = ref(false);
-const showDetailsModal = ref(false);
-const selectedRequest = ref<Request | null>(null);
+// Состояние компонента
+const loading = computed(() => requestsStore.loading)
+const error = computed(() => requestsStore.error)
+const showAssignModal = ref(false)
+const showDetailsModal = ref(false)
+const selectedRequest = ref<Request>()
 
 // Фильтры
 const filters = computed({
-  get: () => requestsStore.filters,
-  set: (value) => requestsStore.setFilters(value)
-});
+  get: () => ({
+    search: requestsStore.filters.search || '',
+    status: requestsStore.filters.status,
+    city_id: requestsStore.filters.city_id
+  }),
+  set: (value) => requestsStore.setFilters({
+    search: value.search || '',
+    status: value.status,
+    city_id: value.city_id
+  })
+})
 
-// Данные
-const requests = computed(() => requestsStore.requests);
-const filteredRequests = computed(() => requestsStore.filteredRequests);
-const availableManagers = computed(() => usersStore.availableManagers);
-const userRole = computed(() => authStore.user?.role);
+// Данные из хранилищ
+const requests = computed(() => requestsStore.requests)
+const availableManagers = computed(() => usersStore.availableManagers)
+const userRole = computed(() => authStore.user?.role)
 
-// Опции фильтров
+// Опции для фильтров
 const statusOptions = [
-  { value: undefined, label: 'Все статусы' },
-  { value: RequestStatus.UNASSIGNED, label: 'Не назначена' },
-  { value: RequestStatus.ASSIGNED, label: 'Назначена' },
-  { value: RequestStatus.IN_PROGRESS, label: 'В работе' },
-  { value: RequestStatus.COMPLETED, label: 'Завершена' },
-  { value: RequestStatus.REJECTED, label: 'Отказ' }
-];
+  { value: undefined, label: 'Все статусы', disabled: false },
+  { value: RequestStatus.UNASSIGNED, label: 'Не назначена', disabled: false },
+  { value: RequestStatus.ASSIGNED, label: 'Назначена', disabled: false },
+  { value: RequestStatus.IN_PROGRESS, label: 'В работе', disabled: false },
+  { value: RequestStatus.COMPLETED, label: 'Завершена', disabled: false },
+  { value: RequestStatus.REJECTED, label: 'Отказ', disabled: false }
+]
 
-const cityOptions = computed(() => {
-  const cities = Array.from(new Set(requests.value.map(r => r.city).filter(Boolean));
+const cityOptionsWithTypes = computed(() => {
+  const cities = Array.from(
+    new Set(requests.value.map(r => r.city).filter((city): city is string => !!city))
+  )
+
   return [
-    { value: undefined, label: 'Все города' },
-    ...cities.map(city => ({ value: city, label: city }))
-  ];
-});
+    { value: undefined, label: 'Все города', disabled: false },
+    ...cities.map(city => ({
+      value: requestsStore.requests.find(r => r.city === city)?.city_id as number | undefined,
+      label: city,
+      disabled: false
+    }))
+  ]
+})
 
 // Заголовки таблицы
-const tableHeaders = [
-  { key: 'id', label: 'ID', width: '80px' },
-  { key: 'client_name', label: 'Клиент' },
-  { key: 'phone', label: 'Телефон' },
-  { key: 'address', label: 'Адрес' },
-  { key: 'status', label: 'Статус', width: '180px' },
-  { key: 'created_at', label: 'Дата создания', width: '150px' },
-  { key: 'actions', label: 'Действия', width: '180px', align: 'right' }
-];
+const tableHeaders: {
+  text: string
+  value: string
+  width?: string
+  align?: 'left' | 'right' | 'center'
+}[] = [
+  { text: 'ID', value: 'id', width: '80px', align: 'left' },
+  { text: 'Клиент', value: 'client_name' },
+  { text: 'Телефон', value: 'phone' },
+  { text: 'Адрес', value: 'address' },
+  { text: 'Статус', value: 'status', width: '180px' },
+  { text: 'Дата создания', value: 'created_at', width: '150px' },
+  { text: 'Действия', value: 'actions', width: '180px', align: 'right' }
+]
+
+const requestsAsRecordArray = computed(() =>
+  requestsStore.filteredRequests.map(request => ({
+    ...request,
+    assigned_to: request.assigned_to ? {
+      ...request.assigned_to,
+      status: request.assigned_to.status as string
+    } : undefined
+  })) as Record<string, unknown>[]
+)
 
 const emptyMessage = computed(() => {
-  if (Object.values(filters.value).some(Boolean)) {
-    return 'Нет заявок, соответствующих фильтрам';
+  if (Object.values(requestsStore.filters).some(Boolean)) {
+    return 'Нет заявок, соответствующих фильтрам'
   }
-  return 'Нет доступных заявок';
-});
+  return 'Нет доступных заявок'
+})
 
-// Методы
 const fetchData = async () => {
   try {
     await Promise.all([
       requestsStore.fetchRequests(),
       userRole.value === 'coordinator' && usersStore.fetchManagers()
-    ]);
+    ])
   } catch (err) {
-    console.error('Ошибка загрузки данных:', err);
+    console.error('Ошибка загрузки данных:', err)
   }
-};
+}
 
 const canAssign = (request: Request) => {
-  return userRole.value === 'coordinator' && request.status === RequestStatus.UNASSIGNED;
-};
+  return userRole.value === 'coordinator' && request.status === RequestStatus.UNASSIGNED
+}
 
 const openAssignModal = (request: Request) => {
-  selectedRequest.value = request;
-  showAssignModal.value = true;
-};
+  selectedRequest.value = request
+  showAssignModal.value = true
+}
 
 const openDetailsModal = (request: Request) => {
-  selectedRequest.value = request;
-  showDetailsModal.value = true;
-};
+  selectedRequest.value = request
+  showDetailsModal.value = true
+}
 
-const handleAssign = async (managerId: number) => {
+const handleAssign = async (managerId: string) => {
   if (selectedRequest.value) {
     try {
-      await requestsStore.assignRequest(selectedRequest.value.id, managerId);
-      showAssignModal.value = false;
+      await requestsStore.assignRequest(selectedRequest.value.id, { manager_id: managerId })
+      showAssignModal.value = false
     } catch (err) {
-      console.error('Ошибка назначения:', err);
+      console.error('Ошибка назначения:', err)
     }
   }
-};
+}
 
 const handleStatusUpdate = async (status: RequestStatus, comment?: string) => {
   if (selectedRequest.value) {
@@ -217,31 +243,33 @@ const handleStatusUpdate = async (status: RequestStatus, comment?: string) => {
         selectedRequest.value.id,
         status,
         comment
-      );
-      showDetailsModal.value = false;
+      )
+      showDetailsModal.value = false
     } catch (err) {
-      console.error('Ошибка обновления статуса:', err);
+      console.error('Ошибка обновления статуса:', err)
     }
   }
-};
+}
 
-const handleBlacklist = async (reason: string) => {
-  if (selectedRequest.value) {
+const handleBlacklistPrompt = async () => {
+  if (!selectedRequest.value) return
+
+  const reason = prompt('Введите причину добавления в черный список:')
+  if (reason) {
     try {
-      await requestsStore.addToBlacklist(selectedRequest.value.id, reason);
-      showDetailsModal.value = false;
+      await requestsStore.addToBlacklist(selectedRequest.value.id, reason)
+      showDetailsModal.value = false
     } catch (err) {
-      console.error('Ошибка добавления в ЧС:', err);
+      console.error('Ошибка добавления в ЧС:', err)
     }
   }
-};
+}
 
 const resetFilters = () => {
-  requestsStore.resetFilters();
-};
+  requestsStore.resetFilters()
+}
 
-// Хуки жизненного цикла
-onMounted(fetchData);
+onMounted(fetchData)
 </script>
 
 <style scoped>

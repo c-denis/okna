@@ -1,9 +1,10 @@
 <template>
   <form @submit.prevent="handleSubmit" class="request-form">
-    <!-- Клиент и контакты -->
+    <!-- Секция данных клиента -->
     <div class="form-section">
       <h3 class="section-title">Данные клиента</h3>
       <div class="form-grid">
+        <!-- Поле ФИО клиента -->
         <AppInput
           v-model="form.client_name"
           label="ФИО клиента*"
@@ -12,6 +13,7 @@
           @blur="validateField('client_name')"
         />
 
+        <!-- Поле телефона с маской -->
         <AppInput
           v-model="form.phone"
           label="Телефон*"
@@ -23,10 +25,11 @@
       </div>
     </div>
 
-    <!-- Адрес -->
+    <!-- Секция адреса -->
     <div class="form-section">
       <h3 class="section-title">Адрес</h3>
       <div class="form-grid">
+        <!-- Выбор города -->
         <AppSelect
           v-model="form.city"
           label="Город*"
@@ -37,6 +40,7 @@
           @update:modelValue="fetchStreets"
         />
 
+        <!-- Поле улицы -->
         <AppInput
           v-model="form.street"
           label="Улица*"
@@ -45,6 +49,7 @@
           @blur="validateField('street')"
         />
 
+        <!-- Группа полей адреса -->
         <div class="address-row">
           <AppInput
             v-model="form.house"
@@ -70,9 +75,10 @@
       </div>
     </div>
 
-    <!-- Дополнительная информация -->
+    <!-- Секция дополнительной информации -->
     <div class="form-section">
       <h3 class="section-title">Дополнительно</h3>
+      <!-- Поле комментария -->
       <AppTextarea
         v-model="form.comment"
         label="Комментарий"
@@ -80,6 +86,7 @@
         rows="3"
       />
 
+      <!-- Выбор приоритета -->
       <AppSelect
         v-model="form.priority"
         label="Приоритет"
@@ -87,14 +94,15 @@
       />
     </div>
 
-    <!-- Состояние формы -->
+    <!-- Блок ошибок формы -->
     <div v-if="error" class="form-error">
       <AppAlert type="error" :message="error" />
     </div>
 
+    <!-- Кнопки действий формы -->
     <div class="form-actions">
       <AppButton
-        type="submit"
+        type="primary"
         :loading="loading"
         :disabled="!isFormValid"
       >
@@ -117,20 +125,38 @@ import { ref, computed, onMounted } from 'vue'
 import { useRequestsStore } from '@/stores/requests.store'
 import { useLocationsStore } from '@/stores/locations.store'
 import { useValidation } from '@/composables/useValidation'
-import type { RequestCreateData, Request } from '@/types/requests'
+import type { Request, RequestCreateData } from '@/types/requests'
 
+/**
+ * Пропсы компонента:
+ * - initialData: Данные для редактирования существующей заявки
+ */
 const props = defineProps<{
   initialData?: Request | null
 }>()
 
-const emit = defineEmits(['success', 'cancel'])
+/**
+ * События компонента:
+ * - success: Успешное сохранение формы
+ * - cancel: Отмена редактирования
+ */
+const emit = defineEmits<{
+  (e: 'success'): void
+  (e: 'cancel'): void
+}>()
 
-// Сторы
+// Инициализация хранилищ
 const requestsStore = useRequestsStore()
 const locationsStore = useLocationsStore()
 
 // Состояние формы
-const form = ref<RequestCreateData>({
+const form = ref<Omit<RequestCreateData, 'address' | 'city_id'> & {
+  city: string
+  street: string
+  house: string
+  building: string
+  apartment: string
+}>({
   client_name: '',
   phone: '',
   city: '',
@@ -145,7 +171,7 @@ const form = ref<RequestCreateData>({
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// Валидация
+// Правила валидации полей формы
 const { errors, validateField, validateForm, resetValidation } = useValidation(
   form,
   {
@@ -157,7 +183,7 @@ const { errors, validateField, validateForm, resetValidation } = useValidation(
   }
 )
 
-// Опции селектов
+// Опции для выпадающих списков
 const priorityOptions = [
   { value: 'low', label: 'Низкий' },
   { value: 'medium', label: 'Средний' },
@@ -184,7 +210,9 @@ const isFormValid = computed(() => {
   )
 })
 
-// Методы
+/**
+ * Валидация номера телефона с кастомным сообщением об ошибке
+ */
 const validatePhone = () => {
   validateField('phone')
   if (errors.value.phone) {
@@ -192,12 +220,18 @@ const validatePhone = () => {
   }
 }
 
+/**
+ * Загрузка улиц для выбранного города
+ */
 const fetchStreets = async (city: string) => {
   if (city) {
     await locationsStore.fetchStreets(city)
   }
 }
 
+/**
+ * Сброс формы к начальным значениям
+ */
 const resetForm = () => {
   if (props.initialData) {
     initForm()
@@ -218,6 +252,9 @@ const resetForm = () => {
   error.value = null
 }
 
+/**
+ * Инициализация формы данными для редактирования
+ */
 const initForm = () => {
   if (props.initialData) {
     const { client_name, phone, address, comment, priority } = props.initialData
@@ -231,9 +268,10 @@ const initForm = () => {
   }
 }
 
+/**
+ * Парсинг адреса из строки в объект
+ */
 const parseAddress = (address: string) => {
-  // Парсинг адреса из строки в объект
-  // Пример: "г. Москва, ул. Ленина, д. 10, к. 2, кв. 5"
   const result = {
     city: '',
     street: '',
@@ -260,6 +298,9 @@ const parseAddress = (address: string) => {
   return result
 }
 
+/**
+ * Форматирование адреса из полей формы в строку
+ */
 const formatAddress = () => {
   const { city, street, house, building, apartment } = form.value
   let address = `г. ${city}, ул. ${street}, д. ${house}`
@@ -268,6 +309,9 @@ const formatAddress = () => {
   return address
 }
 
+/**
+ * Обработчик отправки формы
+ */
 const handleSubmit = async () => {
   if (!validateForm()) return
 
@@ -275,9 +319,18 @@ const handleSubmit = async () => {
   error.value = null
 
   try {
-    const requestData = {
-      ...form.value,
-      address: formatAddress()
+    const requestData: RequestCreateData = {
+      client_name: form.value.client_name,
+      phone: form.value.phone,
+      address: formatAddress(),
+      city: form.value.city,
+      city_id: locationsStore.cities.find(c => c.name === form.value.city)?.id || 0,
+      street: form.value.street,
+      house: form.value.house,
+      building: form.value.building,
+      apartment: form.value.apartment,
+      comment: form.value.comment,
+      priority: form.value.priority
     }
 
     if (editMode.value && props.initialData) {
@@ -295,7 +348,7 @@ const handleSubmit = async () => {
   }
 }
 
-// Инициализация
+// Инициализация компонента
 onMounted(() => {
   locationsStore.fetchCities()
   if (props.initialData) {

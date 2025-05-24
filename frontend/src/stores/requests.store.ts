@@ -1,173 +1,359 @@
 import { defineStore } from 'pinia';
-import {
-  fetchRequests as fetchRequestsApi,
-  createRequest as createRequestApi,
-  assignRequest as assignRequestApi,
-  updateRequestStatus as updateRequestStatusApi,
-  getRequestDetails as getRequestDetailsApi,
-  addToBlacklist as addToBlacklistApi,
-  type Request,
-  type RequestCreateData,
-  type RequestStatus,
-  type RequestFilterParams
-} from '@/api/requests.api';
+import httpClient from '@/utils/httpClient';
 import { useAuthStore } from './auth.store';
+import { useUsersStore } from './user.store';
+import type {
+  Request,
+  RequestCreateData,
+  RequestFilterParams,
+  AssignRequestData,
+  UpdateStatusData,
+  StatusHistoryItem
+} from '@/types/requests';
+import { RequestStatus } from '@/types/requests';
+import { ManagerStatus } from '@/types/users'; // Импортируем из правильного файла
+
+/**
+ * Интерфейс для заявки API (бэкенд формат)
+ */
+interface ApiRequest {
+  id: number;
+  client_name: string;
+  phone: string;
+  address: string;
+  city?: string;
+  city_id?: number;
+  street?: string;
+  house?: string;
+  building?: string;
+  apartment?: string;
+  comment?: string;
+  status: RequestStatus;
+  created_at: string;
+  updated_at?: string;
+  assigned_to?: {
+    id: number;
+    name: string;
+    status: ManagerStatus;
+  };
+  is_blacklisted: boolean;
+  status_history?: Array<{
+    id?: number;
+    status: RequestStatus;
+    changed_at: string;
+    changed_by: string;
+    comment?: string;
+  }>;
+}
+
+/**
+ * Параметры фильтрации для API
+ */
+interface ApiRequestFilterParams {
+  status?: RequestStatus;
+  manager_id?: number;
+  city_id?: number;
+  date_from?: string;
+  date_to?: string;
+  is_blacklisted?: boolean;
+  search?: string;
+}
+
+/**
+ * Состояние хранилища заявок
+ */
+interface RequestsState {
+  requests: Request[];
+  currentRequest: Request | null;
+  loading: boolean;
+  error: string | null;
+  filters: RequestFilterParams;
+}
 
 export const useRequestsStore = defineStore('requests', {
-  state: () => ({
-    requests: [] as Request[],
-    currentRequest: null as Request | null,
+  state: (): RequestsState => ({
+    requests: [],
+    currentRequest: null,
     loading: false,
-    error: null as string | null,
+    error: null,
     filters: {
-      status: undefined as RequestStatus | undefined,
-      city: undefined as string | undefined,
-      search: undefined as string | undefined,
-      date_from: undefined as string | undefined,
-      date_to: undefined as string | undefined
+      status: undefined,
+      city_id: undefined,
+      search: undefined,
+      date_from: undefined,
+      date_to: undefined
     }
   }),
 
   actions: {
-    async fetchRequests(params?: RequestFilterParams) {
+    /**
+     * Загружает заявки с сервера
+     */
+    async fetchRequests(params?: RequestFilterParams): Promise<void> {
       this.loading = true;
       this.error = null;
       try {
-        const effectiveParams = { ...this.filters, ...params };
-        this.requests = await fetchRequestsApi(effectiveParams);
+        const apiParams: ApiRequestFilterParams = {
+          ...this.filters,
+          ...params,
+          manager_id: params?.manager_id ? Number(params.manager_id) : undefined
+        };
+
+        const response = await httpClient.get<ApiRequest[]>('/api/v1/orders/', {
+          params: apiParams
+        });
+        this.requests = response.data.map(this.convertApiRequest);
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Ошибка загрузки заявок';
+        this.handleError(error, 'Ошибка загрузки заявок');
         throw error;
       } finally {
         this.loading = false;
       }
     },
 
-    async createRequest(requestData: RequestCreateData) {
+    /**
+     * Создает новую заявку
+     */
+    async createRequest(requestData: RequestCreateData): Promise<Request> {
       this.loading = true;
       try {
-        const newRequest = await createRequestApi(requestData);
-        this.requests.unshift(newRequest);
-        return newRequest;
+        const response = await httpClient.post<ApiRequest>('/api/v1/orders/', requestData);
+        const convertedRequest = this.convertApiRequest(response.data);
+        this.requests.unshift(convertedRequest);
+        return convertedRequest;
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Ошибка создания заявки';
+        this.handleError(error, 'Ошибка создания заявки');
         throw error;
       } finally {
         this.loading = false;
       }
     },
 
-    async assignRequest(requestId: number, managerId: number) {
-      try {
-        const updatedRequest = await assignRequestApi(requestId, managerId);
-        this.updateRequestInStore(updatedRequest);
-        return updatedRequest;
-      } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Ошибка назначения заявки';
-        throw error;
-      }
-    },
-
-    async updateRequestStatus(requestId: number, status: RequestStatus, comment?: string) {
-      try {
-        const updatedRequest = await updateRequestStatusApi(requestId, status, comment);
-        this.updateRequestInStore(updatedRequest);
-        return updatedRequest;
-      } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Ошибка обновления статуса';
-        throw error;
-      }
-    },
-
-    async fetchRequestDetails(requestId: number) {
+    /**
+     * Обновляет заявку
+     */
+    async updateRequest(requestId: string, requestData: Partial<RequestCreateData>): Promise<Request> {
       this.loading = true;
       try {
-        this.currentRequest = await getRequestDetailsApi(requestId);
-        return this.currentRequest;
+        const response = await httpClient.patch<ApiRequest>(
+          `/api/v1/orders/${requestId}`,
+          requestData
+        );
+        const convertedRequest = this.convertApiRequest(response.data);
+        this.updateRequestInStore(convertedRequest);
+        return convertedRequest;
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Ошибка загрузки деталей';
+        this.handleError(error, 'Ошибка обновления заявки');
         throw error;
       } finally {
         this.loading = false;
       }
     },
 
-    async addToBlacklist(requestId: number, reason: string) {
+    /**
+     * Назначает заявку на менеджера
+     */
+    async assignRequest(requestId: string, data: AssignRequestData): Promise<Request> {
+      const usersStore = useUsersStore();
       try {
-        const updatedRequest = await addToBlacklistApi(requestId, reason);
-        this.updateRequestInStore(updatedRequest);
-        return updatedRequest;
+        const payload = {
+          manager_id: Number(data.manager_id),
+          force: data.force
+        };
+
+        const response = await httpClient.patch<ApiRequest>(
+          `/api/v1/orders/${requestId}/assign/`,
+          payload
+        );
+        const convertedRequest = this.convertApiRequest(response.data);
+        this.updateRequestInStore(convertedRequest);
+
+        await usersStore.updateManagerStatus(
+          data.manager_id,
+          ManagerStatus.BUSY,
+          requestId
+        );
+
+        return convertedRequest;
       } catch (error) {
-        this.error = error instanceof Error ? error.message : 'Ошибка добавления в ЧС';
+        this.handleError(error, 'Ошибка назначения заявки');
         throw error;
       }
     },
 
-    updateRequestInStore(updatedRequest: Request) {
-      const index = this.requests.findIndex(r => r.id === updatedRequest.id);
+    /**
+     * Обновляет статус заявки
+     */
+    async updateRequestStatus(
+      requestId: string,
+      status: RequestStatus,
+      comment?: string
+    ): Promise<Request> {
+      const usersStore = useUsersStore();
+      try {
+        const statusData: UpdateStatusData = { status, comment };
+        const response = await httpClient.patch<ApiRequest>(
+          `/api/v1/orders/${requestId}/status/`,
+          statusData
+        );
+        const convertedRequest = this.convertApiRequest(response.data);
+        this.updateRequestInStore(convertedRequest);
+
+        if (status === 'completed' || status === 'rejected') {
+          const managerId = convertedRequest.assigned_to?.id;
+          if (managerId) {
+            await usersStore.updateManagerStatus(
+              managerId,
+              ManagerStatus.AVAILABLE
+            );
+          }
+        }
+
+        return convertedRequest;
+      } catch (error) {
+        this.handleError(error, 'Ошибка обновления статуса');
+        throw error;
+      }
+    },
+
+    /**
+     * Добавляет в черный список
+     */
+    async addToBlacklist(requestId: string, reason: string): Promise<Request> {
+      try {
+        const response = await httpClient.post<ApiRequest>(
+          `/api/v1/orders/${requestId}/blacklist/`,
+          { reason }
+        );
+        const convertedRequest = this.convertApiRequest(response.data);
+        this.updateRequestInStore(convertedRequest);
+        return convertedRequest;
+      } catch (error) {
+        this.handleError(error, 'Ошибка добавления в ЧС');
+        throw error;
+      }
+    },
+
+    /**
+     * Обновляет заявку в хранилище
+     */
+    updateRequestInStore(request: Request): void {
+      const index = this.requests.findIndex(r => r.id === request.id);
       if (index !== -1) {
-        this.requests.splice(index, 1, updatedRequest);
+        this.requests.splice(index, 1, request);
       }
-      if (this.currentRequest?.id === updatedRequest.id) {
-        this.currentRequest = updatedRequest;
+      if (this.currentRequest?.id === request.id) {
+        this.currentRequest = request;
       }
     },
 
-    resetCurrentRequest() {
-      this.currentRequest = null;
+    /**
+     * Устанавливает фильтры
+     */
+    setFilters(filters: Partial<RequestFilterParams>): void {
+      this.filters = { ...this.filters, ...filters };
     },
 
-    setFilter<K extends keyof typeof this.filters>(key: K, value: typeof this.filters[K]) {
-      this.filters[key] = value;
-    },
-
-    resetFilters() {
+    /**
+     * Сбрасывает фильтры
+     */
+    resetFilters(): void {
       this.filters = {
         status: undefined,
-        city: undefined,
+        city_id: undefined,
         search: undefined,
         date_from: undefined,
         date_to: undefined
       };
+    },
+
+    /**
+     * Преобразует заявку из API формата в клиентский
+     */
+    convertApiRequest(apiRequest: ApiRequest): Request {
+      return {
+        ...apiRequest,
+        id: apiRequest.id.toString(),
+        city_id: apiRequest.city_id || 0,
+        street: apiRequest.street || '',
+        house: apiRequest.house || '',
+        building: apiRequest.building || '',
+        apartment: apiRequest.apartment || '',
+        assigned_to: apiRequest.assigned_to ? {
+          ...apiRequest.assigned_to,
+          id: apiRequest.assigned_to.id.toString(),
+          status: apiRequest.assigned_to.status
+        } : undefined,
+        status_history: apiRequest.status_history?.map((item, index) => ({
+          id: item.id?.toString() || index.toString(),
+          status: item.status,
+          changed_at: item.changed_at,
+          changed_by: item.changed_by,
+          comment: item.comment
+        } as StatusHistoryItem))
+      };
+    },
+
+    /**
+     * Обрабатывает ошибки
+     */
+    handleError(error: unknown, defaultMessage: string): void {
+      this.error = error instanceof Error
+        ? error.message
+        : defaultMessage;
+      console.error('RequestsStore error:', error);
     }
   },
 
   getters: {
-    filteredRequests(state) {
+    /**
+     * Отфильтрованные заявки
+     */
+    filteredRequests(state): Request[] {
       return state.requests.filter(request => {
-        const matchesSearch = !state.filters.search ||
+        const searchFilter = !state.filters.search ||
           request.client_name.toLowerCase().includes(state.filters.search.toLowerCase()) ||
-          request.address.toLowerCase().includes(state.filters.search.toLowerCase());
+          request.phone.includes(state.filters.search);
 
-        const matchesStatus = !state.filters.status ||
+        const statusFilter = !state.filters.status ||
           request.status === state.filters.status;
 
-        const matchesCity = !state.filters.city ||
-          request.city === state.filters.city;
+        const cityFilter = !state.filters.city_id ||
+          request.city_id === state.filters.city_id;
 
-        return matchesSearch && matchesStatus && matchesCity;
+        const dateFrom = state.filters.date_from
+          ? new Date(state.filters.date_from)
+          : null;
+        const dateTo = state.filters.date_to
+          ? new Date(state.filters.date_to)
+          : null;
+
+        const dateFilter = (!dateFrom || new Date(request.created_at) >= dateFrom) &&
+          (!dateTo || new Date(request.created_at) <= dateTo);
+
+        return searchFilter && statusFilter && cityFilter && dateFilter;
       });
     },
 
-    unassignedRequests(state) {
-      return state.requests.filter(r => r.status === 'unassigned');
+    /**
+     * Не назначенные заявки
+     */
+    unassignedRequests(state): Request[] {
+      return state.requests.filter(r => r.status === RequestStatus.UNASSIGNED);
     },
 
-    assignedRequests(state) {
-      return state.requests.filter(r => r.status === 'assigned');
+    /**
+     * Заявки в работе
+     */
+    inProgressRequests(state): Request[] {
+      return state.requests.filter(r => r.status === RequestStatus.IN_PROGRESS);
     },
 
-    inProgressRequests(state) {
-      return state.requests.filter(r => r.status === 'in_progress');
-    },
-
-    getRequestById(state) {
-      return (id: number) => state.requests.find(r => r.id === id);
-    },
-
-    userCanEdit(state) {
-      const authStore = useAuthStore();
-      return authStore.user?.role === 'coordinator' || authStore.user?.role === 'admin';
+    /**
+     * Завершенные заявки
+     */
+    completedRequests(state): Request[] {
+      return state.requests.filter(r => r.status === RequestStatus.COMPLETED);
     }
   }
 });

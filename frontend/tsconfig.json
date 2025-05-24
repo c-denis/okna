@@ -1,21 +1,42 @@
 {
   "compilerOptions": {
-     "lib": ["ES2016", "DOM"],
-    "target": "ES2016",
+    "lib": ["ES2017", "DOM", "DOM.Iterable"],  // Обновлено до ES2017
+    "target": "ESNext",                       // Обновлено для поддержки современных возможностей
     "types": ["vite/client", "vitest/globals"],
     "module": "ESNext",
     "moduleResolution": "node",
     "strict": true,
+    "noImplicitAny": true,                   // Явное запрещение any
+    "strictNullChecks": true,                // Строгая проверка null/undefined
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "baseUrl": ".",  // <-- Добавьте эту строку
-    "paths": {       // <-- Добавьте этот блок
+    "baseUrl": ".",
+    "paths": {
       "@/*": ["src/*"],
       "@components/*": ["src/components/*"],
-      "@utils/*": ["src/utils/*"]
-    }
+      "@utils/*": ["src/utils/*"],
+      "@stores/*": ["src/stores/*"],         // Добавлено для хранилищ
+      "@types/*": ["src/types/*"]           // Добавлено для типов
+    },
+    "isolatedModules": true,                 // Важно для Vite
+    "jsx": "preserve",                       // Если используется JSX
+    "resolveJsonModule": true                // Для импорта JSON
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
-  "exclude": ["node_modules"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts",
+    "src/**/*.tsx",
+    "src/**/*.vue",
+    "tests/**/*.ts"                          // Добавлено для тестов
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts"                          // Исключение тестов, если нужно
+  ]
 }

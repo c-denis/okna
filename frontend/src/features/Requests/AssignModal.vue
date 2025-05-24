@@ -1,204 +1,235 @@
-<template>
-  <AppModal
-    :show="true"
-    :loading="loading"
-    @close="handleClose"
-  >
-    <template #header>
-      <h2>Назначить заявку №{{ request.id }}</h2>
-      <p class="client-info">{{ request.client_name }} - {{ request.address }}</p>
-    </template>
-
-    <div class="assign-content">
-      <AppSelect
-        v-model="selectedManagerId"
-        :options="availableManagerOptions"
-        placeholder="Выберите менеджера"
-        :disabled="loading"
-      />
-
-      <div v-if="selectedManager" class="manager-info">
-        <div class="manager-status">
-          Статус:
-          <StatusBadge :status="selectedManager.status" />
-          <span v-if="selectedManager.status !== 'free'" class="assign-warning">
-            (Может быть перегружен)
-          </span>
-        </div>
-        <div class="manager-stats">
-          Текущая нагрузка: {{ selectedManager.current_assignments }}/{{ selectedManager.max_assignments }}
-        </div>
-      </div>
-
-      <AppAlert
-        v-if="error"
-        type="error"
-        :message="error"
-        class="error-alert"
-      />
-    </div>
-
-    <template #footer>
-      <AppButton @click="handleClose" :disabled="loading">
-        Отмена
-      </AppButton>
-      <AppButton
-        type="primary"
-        :disabled="!canAssign || loading"
-        :loading="assigning"
-        @click="handleAssign"
-      >
-        {{ assignButtonText }}
-      </AppButton>
-    </template>
-  </AppModal>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+/**
+ * МОДАЛЬНОЕ ОКНО НАЗНАЧЕНИЯ МЕНЕДЖЕРА НА ЗАЯВКУ
+ *
+ * Компонент позволяет выбрать доступного менеджера для выполнения заявки.
+ * Интегрируется с хранилищами usersStore и requestsStore.
+ */
+
+import { ref, computed, onMounted } from 'vue'
+import { useUsersStore } from '@/stores/user.store'
 import { useRequestsStore } from '@/stores/requests.store'
-import { useManagersStore } from '@/stores/managers.store'
-import type { Manager } from '@/types/users'
-import type { Request } from '@/types/requests'
+import type { Request as ApiRequest } from '@/composables/api/requests.api'
+import type { Request as TypeRequest, AssignRequestData } from '@/types/requests'
+import { ManagerStatus } from '@/types/users'
+import { RequestStatus } from '@/types/requests'
 
+// Определяем интерфейс для параметров запроса менеджеров
+interface FetchManagersParams {
+  city_id?: number;
+  status?: ManagerStatus;
+}
+
+// Определяем пропсы компонента
 const props = defineProps<{
-  request: Request
+  /**
+   * Объект заявки для назначения
+   * Должен содержать обязательные поля:
+   * - id: string - идентификатор заявки
+   * - city_id: number - идентификатор города
+   * - Адресные данные: street, house, building, apartment
+   */
+  request: TypeRequest
 }>()
 
+// Определяем события компонента
 const emit = defineEmits<{
+  /**
+   * Событие закрытия модального окна
+   */
   (e: 'close'): void
-  (e: 'assigned', request: Request): void
+
+  /**
+   * Событие успешного назначения менеджера
+   * @param request - Обновленный объект заявки
+   */
+  (e: 'assigned', request: TypeRequest): void
 }>()
 
+// Инициализация хранилищ
+const usersStore = useUsersStore()
 const requestsStore = useRequestsStore()
-const managersStore = useManagersStore()
 
-const selectedManagerId = ref<number | null>(null)
+// Реактивные состояния компонента
+const selectedManagerId = ref<string | null>(null)
 const loading = ref(false)
 const assigning = ref(false)
 const error = ref<string | null>(null)
 
-// Загружаем актуальный список менеджеров при открытии
-loading.value = true
-managersStore.fetchAvailableManagers()
-  .catch(err => {
-    error.value = 'Не удалось загрузить список менеджеров'
-    console.error(err)
-  })
-  .finally(() => loading.value = false)
+/**
+ * Загружает менеджеров при монтировании компонента
+ */
+onMounted(async () => {
+  loading.value = true
+  try {
+    // Подготавливаем параметры запроса
+    const params: FetchManagersParams = {
+      city_id: props.request.city_id,
+      status: ManagerStatus.AVAILABLE
+    }
+    await usersStore.fetchManagers(params)
+  } catch (err) {
+    error.value = 'Не удалось загрузить менеджеров'
+    console.error('Error loading managers:', err)
+  } finally {
+    loading.value = false
+  }
+})
 
-// Доступные для назначения менеджеры
+/**
+ * Вычисляемое свойство - доступные для назначения менеджеры
+ * Фильтрует по статусу AVAILABLE и текущей нагрузке
+ */
 const availableManagers = computed(() => {
-  return managersStore.availableManagers.filter(m =>
-    m.status !== 'dayoff' &&
+  return usersStore.availableManagers.filter(m =>
+    m.status === ManagerStatus.AVAILABLE &&
     m.current_assignments < m.max_assignments
   )
 })
 
-// Опции для select
-const availableManagerOptions = computed(() => {
-  return availableManagers.value.map(m => ({
-    value: m.id,
-    text: `${m.name} (${m.specialization || 'Общий'}) - ${m.current_assignments}/${m.max_assignments}`,
-    disabled: m.status !== 'free'
-  }))
-})
-
-// Выбранный менеджер
+/**
+ * Вычисляемое свойство - данные выбранного менеджера
+ */
 const selectedManager = computed(() => {
-  if (!selectedManagerId.value) return null
-  return managersStore.availableManagers.find(m => m.id === selectedManagerId.value) || null
+  return selectedManagerId.value
+    ? usersStore.getManagerById(selectedManagerId.value)
+    : null
 })
 
-// Можно ли назначить
-const canAssign = computed(() => {
-  if (!selectedManager.value) return false
-  return selectedManager.value.status === 'free' &&
-    selectedManager.value.current_assignments < selectedManager.value.max_assignments
-})
-
-// Текст кнопки назначения
-const assignButtonText = computed(() => {
-  if (!selectedManager.value) return 'Назначить'
-  return canAssign.value
-    ? 'Назначить'
-    : 'Менеджер недоступен'
-})
-
-// Обработка назначения
+/**
+ * Обработчик назначения менеджера на заявку
+ */
 const handleAssign = async () => {
-  if (!selectedManagerId.value || !canAssign.value) return
+  if (!selectedManagerId.value || !selectedManager.value) {
+    error.value = 'Выберите менеджера для назначения'
+    return
+  }
 
   assigning.value = true
   error.value = null
 
   try {
+    // Подготавливаем данные для назначения
+    const assignData: AssignRequestData = {
+      manager_id: selectedManagerId.value
+    }
+
+    // Вызываем метод назначения из хранилища
     const updatedRequest = await requestsStore.assignRequest(
       props.request.id,
-      selectedManagerId.value
+      assignData
     )
 
-    emit('assigned', updatedRequest)
-    handleClose()
+    // Обновляем статус менеджера
+    await usersStore.updateManagerStatus(
+      selectedManagerId.value,
+      ManagerStatus.BUSY,
+      props.request.id
+    )
 
+    // Преобразуем тип заявки для родительского компонента
+    const typedRequest: TypeRequest = {
+      ...props.request,
+      ...updatedRequest,
+      id: props.request.id,
+      assigned_to: selectedManager.value,
+      status: RequestStatus.ASSIGNED // ✅ Правильно
+    }
+
+    emit('assigned', typedRequest)
+    emit('close')
   } catch (err) {
     error.value = err instanceof Error
       ? err.message
-      : 'Ошибка при назначении заявки'
-    console.error('Assign error:', err)
-
+      : 'Произошла ошибка при назначении заявки'
+    console.error('Assignment error:', err)
   } finally {
     assigning.value = false
   }
 }
-
-// Закрытие модального окна
-const handleClose = () => {
-  if (!assigning.value) {
-    emit('close')
-  }
-}
-
-// Сбрасываем ошибку при смене менеджера
-watch(selectedManagerId, () => {
-  error.value = null
-})
 </script>
 
+<template>
+  <div class="assign-modal">
+    <h3>Назначение заявки #{{ request.id }}</h3>
+
+    <div v-if="error" class="error-message">
+      {{ error }}
+    </div>
+
+    <div v-if="loading" class="loading">
+      Загрузка списка менеджеров...
+    </div>
+
+    <div v-else class="manager-selection">
+      <label>Выберите менеджера:</label>
+      <select
+        v-model="selectedManagerId"
+        :disabled="assigning"
+      >
+        <option :value="null">Не назначено</option>
+        <option
+          v-for="manager in availableManagers"
+          :key="manager.id"
+          :value="manager.id"
+        >
+          {{ manager.name }} ({{ manager.specialization || 'без специализации' }})
+        </option>
+      </select>
+    </div>
+
+    <div class="actions">
+      <button
+        @click="handleAssign"
+        :disabled="!selectedManagerId || assigning"
+      >
+        {{ assigning ? 'Назначение...' : 'Назначить' }}
+      </button>
+      <button @click="emit('close')" :disabled="assigning">
+        Отмена
+      </button>
+    </div>
+  </div>
+</template>
+
 <style scoped>
-.assign-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 12px 0;
-}
-
-.client-info {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  margin-top: 4px;
-}
-
-.manager-info {
-  padding: 12px;
-  background: var(--background-secondary);
+.assign-modal {
+  padding: 20px;
+  background: white;
   border-radius: 8px;
-  font-size: 0.9rem;
+  max-width: 500px;
+  margin: 0 auto;
 }
 
-.manager-status {
+.error-message {
+  color: red;
+  margin-bottom: 15px;
+}
+
+.loading {
+  padding: 10px;
+  text-align: center;
+}
+
+.manager-selection {
+  margin: 15px 0;
+}
+
+.manager-selection select {
+  width: 100%;
+  padding: 8px;
+  margin-top: 5px;
+}
+
+.actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
 }
 
-.assign-warning {
-  color: var(--color-warning);
-  font-size: 0.85rem;
-}
-
-.error-alert {
-  margin-top: 12px;
+.actions button {
+  padding: 8px 15px;
+  cursor: pointer;
 }
 </style>
